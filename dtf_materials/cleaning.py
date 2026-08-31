@@ -48,7 +48,13 @@ def parse_price(value: str | None) -> float | None:
         return None
     cleaned = _CURRENCY_NOISE.sub("", text)
     if "," in cleaned and "." in cleaned:
-        cleaned = cleaned.replace(",", "")          # thousands separator
+        # Both separators present: the LAST one is the decimal separator.
+        # "1,234.56" -> 1234.56   and   "1.234,56" -> 1234.56
+        # (Deciding by presence alone silently turned "1.234,56" into 1.2346.)
+        if cleaned.rfind(",") > cleaned.rfind("."):
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
     elif "," in cleaned:
         cleaned = cleaned.replace(",", ".")          # European decimal
     try:
@@ -130,6 +136,7 @@ if __name__ == "__main__":
     assert parse_price(" 18.00 ") == 18.00
     assert parse_price("17,10") == 17.10
     assert parse_price("$1,234.56") == 1234.56
+    assert parse_price("1.234,56") == 1234.56
     assert parse_price("TBD") is None
     assert parse_price("call") is None
     assert parse_price("") is None

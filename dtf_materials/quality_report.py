@@ -26,6 +26,7 @@ def report(db_path=DEFAULT_DB_PATH) -> dict:
     parts_seen: dict[str, set[str]] = defaultdict(set)   # part_num -> set of normalized names
     parts_rows: dict[str, list[int]] = defaultdict(list)
     supplier_spellings: dict[str, set[str]] = defaultdict(set)  # normalized key -> raw spellings seen
+    parts_suppliers: dict[str, set[str]] = defaultdict(set)     # part # -> supplier keys seen
 
     for row in rows:
         n = row["source_row"]
@@ -52,9 +53,19 @@ def report(db_path=DEFAULT_DB_PATH) -> dict:
         supplier = cleaning.clean_text(row["supplier_mfg"])
         if supplier:
             supplier_spellings[cleaning.normalize_key(supplier)].add(supplier)
+            if part_num is not None:
+                parts_suppliers[part_num].add(cleaning.normalize_key(supplier))
+
+        price = cleaning.parse_price(row["price_per_kilo"])
+        if price is not None and price <= 0:
+            findings["nonpositive_price"].append((n, row["price_per_kilo"]))
 
         if cleaning.clean_text(row["category"]) is None:
             findings["missing_category"].append(n)
+
+    for part_num, sups in parts_suppliers.items():
+        if len(sups) > 1:
+            findings["part_num_multiple_suppliers"].append((part_num, sorted(sups)))
 
     for part_num, names in parts_seen.items():
         if len(names) > 1:
@@ -64,13 +75,14 @@ def report(db_path=DEFAULT_DB_PATH) -> dict:
     # normalize_key upstream; here we look for spellings that are DIFFERENT
     # keys but suspiciously similar strings — the kind a human should review
     # for merging (e.g. "NutraSci" vs "Nutra Sci").
-    canonical_spellings = sorted({next(iter(s)) for s in supplier_spellings.values()})
-    checked = set()
+    # min() rather than an arbitrary set element: set iteration order for
+    # strings varies with the process hash seed, which made this report's
+    # output differ between runs on identical data.
+    canonical_spellings = sorted(min(s) for s in supplier_spellings.values())
     for a in canonical_spellings:
         for b in canonical_spellings:
-            if a >= b or (a, b) in checked:
+            if a >= b:
                 continue
-            checked.add((a, b))
             ratio = SequenceMatcher(None, a.lower(), b.lower()).ratio()
             if ratio > 0.6:
                 findings["possible_duplicate_supplier"].append((a, b, round(ratio, 2)))
@@ -91,6 +103,19 @@ def print_report(findings: dict) -> None:
         print(f"[{len(findings['conflicting_part_num'])}] DTF Part #s reused across different material names:")
         for part_num, names, source_rows in findings["conflicting_part_num"]:
             print(f"    {part_num}: {names}  (source rows: {source_rows})")
+        print()
+
+    if findings["part_num_multiple_suppliers"]:
+        print(f"[{len(findings['part_num_multiple_suppliers'])}] Part #s listed under more than one supplier "
+              f"(only the first is kept on the material row):")
+        for part_num, sups in findings["part_num_multiple_suppliers"][:10]:
+            print(f"    {part_num}: {sups}")
+        print()
+
+    if findings["nonpositive_price"]:
+        print(f"[{len(findings['nonpositive_price'])}] Rows with a zero or negative price:")
+        for n, val in findings["nonpositive_price"][:10]:
+            print(f"    row {n}: {val!r}")
         print()
 
     if findings["possible_duplicate_supplier"]:

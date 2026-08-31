@@ -39,7 +39,9 @@ from .sources.base import EXPECTED_HEADERS
 class LoadStats:
     staged_rows: int = 0
     materials_created: int = 0
+    materials_updated: int = 0
     materials_conflicted: int = 0
+    stale_materials: int = 0
     lots_created: int = 0
     rows_missing_part_num: int = 0
     suppliers_created: int = 0
@@ -47,10 +49,22 @@ class LoadStats:
 
 
 def reset_derived_tables(conn: sqlite3.Connection) -> None:
-    """Clear everything the ETL owns (not `samples`/`sample_materials`,
-    which phase 5 will own)."""
-    for table in ["lot_locations", "lots", "materials", "supplier_aliases",
-                  "suppliers", "staging_inventory_raw"]:
+    """Clear the per-run tables only.
+
+    Deliberately does NOT delete `materials` or `suppliers`. Those are
+    upserted instead, because `material_id` is a stable identity that other
+    tables (`sample_materials`) reference: deleting and re-inserting would
+    reassign every id on each run, so merely re-sorting the source sheet
+    would silently repoint sample history at the wrong materials. Lots are
+    fully rebuilt from the source each run, which is safe because nothing
+    references `lot_id` outside `lot_locations`.
+
+    A consequence worth knowing: a material that disappears from the sheet
+    stays in the database rather than vanishing. That is the intended
+    behavior for a master table — it keeps history — and `stale_materials`
+    in the load stats reports how many were not seen this run.
+    """
+    for table in ["lot_locations", "lots", "staging_inventory_raw"]:
         conn.execute(f"DELETE FROM {table}")
 
 
@@ -81,7 +95,6 @@ def stage(conn: sqlite3.Connection, source: InventorySource, stats: LoadStats) -
             ),
         )
         stats.staged_rows += 1
-    conn.commit()
 
 
 def resolve_supplier(conn: sqlite3.Connection, raw_name: str | None, stats: LoadStats) -> int | None:
@@ -127,14 +140,32 @@ def load_materials_and_lots(conn: sqlite3.Connection, stats: LoadStats) -> None:
         supplier_id = resolve_supplier(conn, row["supplier_mfg"], stats)
 
         if part_num not in material_id_by_part:
-            cur = conn.execute(
+            # Upsert on the business key so material_id stays stable across runs.
+            # First row seen for a part # in THIS run supplies the canonical
+            # attributes; COALESCE keeps a previously-known value rather than
+            # overwriting it with a blank cell.
+            existing_row = conn.execute(
+                "SELECT material_id FROM materials WHERE dtf_part_num = ?", (part_num,)
+            ).fetchone()
+            conn.execute(
                 """INSERT INTO materials
-                   (dtf_part_num, material_name, supplier_id, category, allergen)
-                   VALUES (?,?,?,?,?)""",
+                       (dtf_part_num, material_name, supplier_id, category, allergen)
+                   VALUES (?,?,?,?,?)
+                   ON CONFLICT(dtf_part_num) DO UPDATE SET
+                       material_name = COALESCE(excluded.material_name, materials.material_name),
+                       supplier_id   = COALESCE(excluded.supplier_id,   materials.supplier_id),
+                       category      = COALESCE(excluded.category,      materials.category),
+                       allergen      = COALESCE(excluded.allergen,      materials.allergen)""",
                 (part_num, name, supplier_id, category, allergen),
             )
-            material_id_by_part[part_num] = cur.lastrowid
-            stats.materials_created += 1
+            row_id = conn.execute(
+                "SELECT material_id FROM materials WHERE dtf_part_num = ?", (part_num,)
+            ).fetchone()["material_id"]
+            material_id_by_part[part_num] = row_id
+            if existing_row is None:
+                stats.materials_created += 1
+            else:
+                stats.materials_updated += 1
         else:
             existing = conn.execute(
                 "SELECT material_name FROM materials WHERE material_id = ?",
@@ -175,8 +206,6 @@ def load_materials_and_lots(conn: sqlite3.Connection, stats: LoadStats) -> None:
                 (lot_id, loc),
             )
 
-    conn.commit()
-
 
 def refresh_current_prices(conn: sqlite3.Connection) -> None:
     """Set materials.current_price_per_kilo from each material's most recent
@@ -196,17 +225,36 @@ def refresh_current_prices(conn: sqlite3.Connection) -> None:
         )
         """
     )
-    conn.commit()
 
 
 def run(source: InventorySource, db_path: Path | str = DEFAULT_DB_PATH) -> LoadStats:
-    conn = init_db(db_path)
+    """Load the source into the database as a single atomic transaction.
+
+    Atomicity matters more than it looks: the run begins by clearing lots and
+    staging, so a failure partway through (a malformed row, a dropped network
+    connection mid-fetch once the source is the live Google Sheet) would
+    otherwise leave the database emptied and not repopulated. Everything
+    between reset and refresh commits together or not at all.
+    """
+    conn = init_db(db_path)          # schema DDL commits on its own
     stats = LoadStats()
-    reset_derived_tables(conn)
-    stage(conn, source, stats)
-    load_materials_and_lots(conn, stats)
-    refresh_current_prices(conn)
-    conn.close()
+    try:
+        conn.execute("BEGIN")
+        reset_derived_tables(conn)
+        stage(conn, source, stats)
+        load_materials_and_lots(conn, stats)
+        refresh_current_prices(conn)
+        stats.stale_materials = conn.execute(
+            """SELECT COUNT(*) FROM materials m
+               WHERE NOT EXISTS (SELECT 1 FROM lots l WHERE l.material_id = m.material_id)
+                 AND m.is_sample_only = 0"""
+        ).fetchone()[0]
+        conn.commit()
+    except Exception:
+        conn.rollback()              # database is left exactly as it was
+        raise
+    finally:
+        conn.close()
     return stats
 
 
@@ -222,10 +270,13 @@ def main() -> None:
     print(f"Staged {stats.staged_rows} rows from {args.csv_path}")
     if stats.header_mismatches:
         print(f"  WARNING: source is missing expected columns: {stats.header_mismatches}")
-    print(f"Materials created: {stats.materials_created}  (suppliers created: {stats.suppliers_created})")
+    print(f"Materials created: {stats.materials_created}, updated: {stats.materials_updated}"
+          f"  (suppliers created: {stats.suppliers_created})")
     print(f"Lots created: {stats.lots_created}")
     print(f"Rows skipped (missing DTF Part #): {stats.rows_missing_part_num}")
     print(f"Materials with conflicting name on a repeated Part #: {stats.materials_conflicted}")
+    if stats.stale_materials:
+        print(f"Materials in DB no longer present in the sheet: {stats.stale_materials}")
 
 
 if __name__ == "__main__":

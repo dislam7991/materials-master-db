@@ -48,15 +48,27 @@ value or `None` out, never an exception — so a single bad cell can't crash a
 106-row load. The data-quality report queries staging directly, so it can
 point at a broken cell even on a row that never made it into `materials`/`lots`.
 
-**Full reload, not incremental, on purpose.** Each run truncates
-`staging_inventory_raw` and everything derived from it, then rebuilds from
-the source. For a sheet this size (hundreds of rows, run on demand) that's
-simpler and safer than tracking "what's new since last run," and it makes
-every run idempotent — running it twice in a row produces identical output,
-which is worth being able to say plainly in an interview. The natural
-next step, once volume or history requirements justify it, is incremental
-loads keyed on Receiving Date + DTF Lot #; that's a deliberate scope cut,
-not an oversight.
+**Full reload of lots, upsert of materials.** Each run truncates staging,
+`lots`, and `lot_locations` and rebuilds them from the source; `materials`
+and `suppliers` are upserted on their business keys and never deleted. The
+distinction matters: `material_id` is a stable identity that
+`sample_materials` references, so delete-and-reinsert would reassign every id
+on each run and merely re-sorting the source sheet would silently repoint
+sample history at the wrong materials. Lots can be rebuilt freely because
+nothing outside `lot_locations` references `lot_id`. Consequence: a material
+that disappears from the sheet stays in the database (correct for a master
+table — it keeps history) and is counted as `stale_materials` in the run stats.
+
+**The load is one atomic transaction.** The run starts by clearing lots and
+staging, so a failure partway through — a malformed row, or a dropped
+connection mid-fetch once the source is the live Google Sheet — would
+otherwise leave the database emptied and not repopulated. Everything between
+reset and price-refresh commits together or rolls back entirely.
+
+For a sheet this size (hundreds of rows, run on demand) reloading beats
+tracking "what's new since last run," and it makes every run idempotent. The
+natural next step, once volume justifies it, is incremental loads keyed on
+Receiving Date + DTF Lot #; that's a deliberate scope cut, not an oversight.
 
 **Conflicting Part # handling.** When the same DTF Part # appears with two
 different material names, the first-seen row wins as the canonical
