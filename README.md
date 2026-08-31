@@ -16,7 +16,7 @@ the real source lives in a local, gitignored config and is never committed.
 - [x] Synthetic dirty-data generator
 - [x] ETL: extract → stage → validate → load
 - [x] Data-quality report
-- [ ] Streamlit lookup app
+- [x] Streamlit lookup app
 - [ ] Google Sheets source adapter (real data, local config only)
 - [ ] Sample-request ingestion (Excel) and material↔sample history
 
@@ -27,7 +27,41 @@ python dtf_materials/db.py                    # create db/materials.db from db/s
 python scripts/generate_synthetic_sheet.py    # write data/synthetic/raw_material_inventory.csv
 python -m dtf_materials.etl                    # stage + load the sheet into the DB
 python -m dtf_materials.quality_report         # print the dirty-data findings
+streamlit run app.py                           # launch the lookup app
 ```
+
+The pipeline is stdlib-only; `pip install -r requirements.txt` is needed only
+for the app.
+
+## The lookup app
+
+See [app.py](app.py) (UI only) and [dtf_materials/queries.py](dtf_materials/queries.py)
+(all data access). They are separate so the queries can be tested from a REPL
+or reused by a future CLI/API without importing Streamlit.
+
+Two tabs: look up a material by Part # or name, and look up what is stored at
+a location (a full code like `6L-27-D`, or an aisle prefix like `6L`).
+
+**Search is parameterized and wildcard-escaped.** User input never reaches SQL
+as a string fragment, and `%`/`_` in a search term match literally — otherwise
+searching for a material named "Whey Protein Isolate 90%" would silently match
+everything. Results rank exact and prefix Part # matches first, because
+someone typing a part number wants that material, not the alphabetically-first
+name containing the string.
+
+**Stock figures are reported honestly, which took three passes to get right.**
+The source records one quantity per lot plus the location(s) that lot
+occupies, and never how the quantity splits between them. So:
+
+* A lot spanning several locations contributes its *full* quantity to each of
+  its rows. The app flags this and tells you not to sum the rows — dividing
+  the quantity evenly would be fabricating a number the company doesn't have.
+* Stock in lots with a blank Locations cell appears in the total but in no
+  row. The app reports that quantity explicitly rather than letting the two
+  numbers disagree silently — material the company owns and cannot locate
+  from the record is exactly what this tool exists to surface.
+* A material with nothing in stock shows its last known location, clearly
+  labelled. "No stock on hand" is not the same as "no idea where this lives".
 
 ## ETL design
 

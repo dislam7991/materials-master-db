@@ -177,7 +177,9 @@ def make_row(part_num: str, name: str, category: int, supplier_variants: list[st
         str(category) if rng.random() > 0.05 else "",
         price_txt,
         total,
-        rng.choice(["", "", "", "Yes", "y", "TRUE"]),
+        # Archived lots are a minority in reality; an even split made most
+        # materials look like they had no current location at all.
+        rng.choices(["", "Yes", "y", "TRUE"], weights=[82, 8, 5, 5], k=1)[0],
     ]
 
 

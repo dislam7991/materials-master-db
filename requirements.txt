@@ -1,0 +1,4 @@
+# The pipeline itself (schema, ETL, cleaning, quality report) is stdlib-only
+# and needs nothing here. These are only for the lookup app.
+streamlit>=1.40
+pandas>=2.0
