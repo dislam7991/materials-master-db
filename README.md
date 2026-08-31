@@ -113,11 +113,21 @@ reprice between receivings, so `price_per_kilo` is recorded per lot, which gives
 price history for free. For convenient lookups, the ETL refreshes
 `materials.current_price_per_kilo` from the most recent lot.
 
-**Locations: raw text preserved, parsed rows beside it.** The source sheet's
-Locations cell is free text and can hold several locations ("A3 / B12"). The lot
-keeps the verbatim cell (`locations_raw`) so nothing is lost, and `lot_locations`
-holds individually parsed locations where parsing succeeds. Unparseable cells are
-flagged by the quality report instead of silently dropped.
+**Locations: raw text preserved, parsed rows beside it.** A location is a
+hyphen-joined alphanumeric code (`6L-27-D`), and one cell can hold several,
+usually comma-separated (`6R-09-E, 6R-10-C, 6R-13-C`). Some locations are
+named words instead (`cooler`), and the cell can be blank. The lot keeps the
+verbatim cell (`locations_raw`) so nothing is lost; `lot_locations` holds the
+parsed, upper-cased individual codes, which is what makes "what else is in
+rack 6L?" a simple query.
+
+Splitting on whitespace is conditional on purpose: `6R-09-E 6R-10-C` is two
+locations, but `back cooler` is one. A token is only split on whitespace when
+every resulting piece matches the code pattern; otherwise it is kept intact
+as free text rather than guessed at. The quality report then flags parsed
+locations that match neither the code format nor a known named location —
+and because it counts repeats, a value appearing many times reads as a real
+named location to whitelist, while a one-off (`1L-28-`) reads as a typo.
 
 **Suppliers normalized with an alias table.** The sheet spells the same supplier
 several ways. `suppliers` holds one canonical row per company;

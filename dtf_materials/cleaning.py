@@ -14,7 +14,16 @@ from datetime import datetime
 _DATE_FORMATS = ["%m/%d/%Y", "%Y-%m-%d", "%b %d %Y"]
 
 _CURRENCY_NOISE = re.compile(r"[\s$]|/kg\b", re.IGNORECASE)
-_LOCATION_SPLIT = re.compile(r"[/,&]")
+# Locations are separated by commas (the common case), sometimes a slash or
+# semicolon. Deliberately NOT a bare space: a location may be free text
+# ("back cooler"), and splitting on space would tear it in half.
+_LOCATION_SPLIT = re.compile(r"[,;/]")
+
+# A warehouse location code: hyphen-joined alphanumeric segments, e.g. 6L-27-D.
+_LOCATION_CODE = re.compile(r"^[A-Z0-9]+(?:-[A-Z0-9]+)+$")
+
+# Named locations that are legitimately words rather than codes.
+KNOWN_NAMED_LOCATIONS = {"COOLER"}
 
 
 def clean_text(value: str | None) -> str | None:
@@ -95,17 +104,50 @@ def parse_bool_flag(value: str | None) -> int:
 
 
 def split_locations(value: str | None) -> list[str]:
-    """Split a free-text Locations cell on '/', ',', '&' into individual
-    location tokens, trimmed and de-duplicated, order preserved."""
+    """Split a free-text Locations cell into individual locations.
+
+    Handles the observed real formats: a single code ("6L-27-D"), several
+    comma-separated codes ("6R-09-E, 6R-10-C, 6R-13-C"), a named location
+    ("cooler"), and blank/NULL cells.
+
+    Splitting on whitespace is conditional on purpose. "6R-09-E 6R-10-C" is
+    two locations, but "back cooler" is one — so a token is only split on
+    whitespace when EVERY resulting piece looks like a location code. When
+    any piece doesn't, the token is left intact as free text rather than
+    guessed at. Returned codes are upper-cased and de-duplicated so they
+    match across rows; `lots.locations_raw` keeps the cell verbatim.
+    """
     text = clean_text(value)
     if text is None:
         return []
-    parts = [p.strip() for p in _LOCATION_SPLIT.split(text)]
+
+    tokens: list[str] = []
+    for raw_token in _LOCATION_SPLIT.split(text):
+        token = re.sub(r"\s+", " ", raw_token).strip()
+        if not token:
+            continue
+        pieces = token.split(" ")
+        if len(pieces) > 1 and all(_LOCATION_CODE.match(p.upper()) for p in pieces):
+            tokens.extend(pieces)
+        else:
+            tokens.append(token)
+
     seen: dict[str, None] = {}
-    for p in parts:
-        if p:
-            seen.setdefault(p, None)
+    for t in tokens:
+        seen.setdefault(t.upper(), None)
     return list(seen.keys())
+
+
+def is_standard_location(location: str | None) -> bool:
+    """True if a parsed location matches the expected code format (6L-27-D)
+    or is a known named location. Free-text locations are legal but worth
+    surfacing in the quality report — a run of them usually means either a
+    typo or a real named location that belongs in KNOWN_NAMED_LOCATIONS."""
+    text = clean_text(location)
+    if text is None:
+        return False
+    upper = text.upper()
+    return bool(_LOCATION_CODE.match(upper)) or upper in KNOWN_NAMED_LOCATIONS
 
 
 def normalize_key(value: str | None) -> str | None:
@@ -141,10 +183,21 @@ if __name__ == "__main__":
     assert parse_price("call") is None
     assert parse_price("") is None
 
-    assert split_locations("B12 / A1, B1") == ["B12", "A1", "B1"]
-    assert split_locations("A2 & Cooler 1 & C4") == ["A2", "Cooler 1", "C4"]
-    assert split_locations("A1") == ["A1"]
+    assert split_locations("6L-27-D") == ["6L-27-D"]
+    assert split_locations("6R-09-E, 6R-10-C, 6R-13-C") == ["6R-09-E", "6R-10-C", "6R-13-C"]
+    assert split_locations("6L-27-D,6L-28-D") == ["6L-27-D", "6L-28-D"]
+    assert split_locations("6R-09-E 6R-10-C") == ["6R-09-E", "6R-10-C"]   # space-separated codes
+    assert split_locations("back cooler") == ["BACK COOLER"]              # free text stays whole
+    assert split_locations("cooler") == ["COOLER"]
+    assert split_locations("6l-27-d / 6L-27-D") == ["6L-27-D"]            # case-folded dedupe
     assert split_locations("") == []
+    assert split_locations(None) == []
+
+    assert is_standard_location("6L-27-D")
+    assert is_standard_location("cooler")
+    assert not is_standard_location("back cooler")
+    assert not is_standard_location("6L-27-")
+    assert not is_standard_location(None)
 
     assert normalize_supplier_key("Sensapure Flavors") == normalize_supplier_key("sensapure flavors")
     assert normalize_supplier_key("NutraSci") != normalize_supplier_key("Nutra Sci")

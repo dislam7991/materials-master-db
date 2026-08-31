@@ -7,7 +7,9 @@ same kinds of dirtiness the real sheet has:
   * supplier names spelled several different ways
   * prices stored as text ("$12.50", "12,40", " 18.00 ", "TBD", "call")
   * inconsistent date formats (m/d/yyyy, yyyy-mm-dd, "Jan 5 2026", blank)
-  * multi-location free-text cells ("A3 / B12", "Rack 2 shelf 4, overflow")
+  * location cells in the real formats: a code ("6L-27-D"), several codes
+    separated by commas/slashes/spaces, named locations ("cooler"), truncated
+    codes ("1L-28-"), wrong case, and blanks
   * stray whitespace and casing noise in names
 
 Seeded, so the output is reproducible. Stdlib only.
@@ -73,8 +75,13 @@ FLAVOR_MATERIALS = [
 
 ALLERGENS = ["None", "None", "None", "None", "Milk", "Soy", "Tree Nut (Coconut)", ""]
 STATUSES = ["Active", "Active", "Active", "QUARANTINE", "Hold", "active", ""]
-LOCATIONS = ["A1", "A2", "A3", "B1", "B2", "B12", "C4", "C7", "D2",
-             "Rack 2 shelf 4", "Cooler 1", "Overflow"]
+# Real locations are hyphen-joined alphanumeric codes like "6L-27-D", plus a
+# named "cooler". Generated rather than listed so the synthetic sheet has a
+# realistic spread of codes across racks/bays/levels.
+def _location_code(rng: random.Random) -> str:
+    return f"{rng.randint(1, 8)}{rng.choice('LR')}-{rng.randint(1, 40):02d}-{rng.choice('ABCDEF')}"
+
+NAMED_LOCATIONS = ["cooler", "cooler", "back cooler", "QC hold"]
 
 
 def messy_date(d: date, rng: random.Random) -> str:
@@ -106,12 +113,24 @@ def messy_price(base: float, rng: random.Random) -> str:
 
 
 def messy_location(rng: random.Random) -> str:
+    """Build a Locations cell in the real formats, including the dirty ones:
+    inconsistent separators/spacing, wrong case, a truncated code, a
+    free-text named location, and the occasional blank cell."""
+    r = rng.random()
+    if r < 0.06:
+        return ""                                   # blank / NULL
+    if r < 0.14:
+        return rng.choice(NAMED_LOCATIONS)          # free-text named location
+    if r < 0.18:
+        code = _location_code(rng)
+        return code[:-1] if rng.random() < 0.5 else code.lower()   # truncated or lowercased
+
     n = rng.choices([1, 1, 1, 2, 3], k=1)[0]
-    locs = rng.sample(LOCATIONS, n)
+    codes = [_location_code(rng) for _ in range(n)]
     if n == 1:
-        return locs[0]
-    sep = rng.choice([" / ", ", ", " & ", "/"])
-    return sep.join(locs)
+        return codes[0]
+    sep = rng.choices([", ", ",", " / ", " "], weights=[70, 10, 10, 10], k=1)[0]
+    return sep.join(codes)
 
 
 def messy_name(name: str, rng: random.Random) -> str:

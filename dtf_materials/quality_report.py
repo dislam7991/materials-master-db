@@ -60,6 +60,13 @@ def report(db_path=DEFAULT_DB_PATH) -> dict:
         if price is not None and price <= 0:
             findings["nonpositive_price"].append((n, row["price_per_kilo"]))
 
+        if cleaning.clean_text(row["locations"]) is None:
+            findings["missing_location"].append(n)
+        else:
+            for loc in cleaning.split_locations(row["locations"]):
+                if not cleaning.is_standard_location(loc):
+                    findings["nonstandard_location"].append((n, loc))
+
         if cleaning.clean_text(row["category"]) is None:
             findings["missing_category"].append(n)
 
@@ -111,6 +118,20 @@ def print_report(findings: dict) -> None:
         for part_num, sups in findings["part_num_multiple_suppliers"][:10]:
             print(f"    {part_num}: {sups}")
         print()
+
+    if findings["nonstandard_location"]:
+        from collections import Counter
+        counts = Counter(loc for _, loc in findings["nonstandard_location"])
+        print(f"[{len(findings['nonstandard_location'])}] Locations not matching the expected code "
+              f"format (e.g. 6L-27-D) or a known named location:")
+        for loc, count in counts.most_common(10):
+            rows_for = [n for n, l in findings["nonstandard_location"] if l == loc][:4]
+            print(f"    {loc!r}  x{count}  (rows {rows_for}{'...' if count > 4 else ''})")
+        print("    -> a repeated value here is usually a real named location to whitelist;")
+        print("       a one-off is usually a typo.\n")
+
+    if findings["missing_location"]:
+        print(f"[{len(findings['missing_location'])}] Rows with no location.\n")
 
     if findings["nonpositive_price"]:
         print(f"[{len(findings['nonpositive_price'])}] Rows with a zero or negative price:")
