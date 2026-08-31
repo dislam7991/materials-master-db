@@ -1,0 +1,27 @@
+# Local config with real connection details (Google service account, sheet IDs).
+# Never committed — synthetic data is the only data that lives in this repo.
+config.local.toml
+credentials/
+*.json.key
+service_account*.json
+
+# Databases (built artifacts, regenerate from the pipeline)
+*.db
+*.sqlite
+*.sqlite3
+
+# Real exports must never land in git
+data/real/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Editor/OS noise
+.vscode/
+.idea/
+Thumbs.db

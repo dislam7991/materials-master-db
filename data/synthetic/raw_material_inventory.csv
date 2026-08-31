@@ -1,0 +1,107 @@
+Receiving Date,Locations,DTF Lot #,DTF Part #,Status,Allergen,Material Name,Supplier/MFG,Lot/Batch,EXP. Date,Start Day Stock,Current Stock,Filter Moving/Date,Check/Cycle count,Category (1 Raw)(2 Flavor),Price Per Kilo,Total cost,Ready To Archive
+Oct 19 2024,B12 / Cooler 1 / Overflow,DTF-249012,FL-7126,Hold,Milk,Green Apple Flavor Art,Glanbia Nutritionals,754031,,24.42,4.37,Yes 3/2025,recount,2,117.38,,
+Jun 21 2024,Cooler 1,DTF-249450,FL-6947,Active,None,Pineapple Flavor Nat WONF,sensapure flavors,680030,12/13/2025,20.96,13.48,Yes 3/2025,OK,2,156.71,3284.71,TRUE
+5/1/2025,"B12, A1, B1",DTF-256526,FL-8433,Active,Milk,Chocolate Flavor Nat,Sensapure,885194,May 01 2027,6.06,0.73,Yes 3/2025,ok 5/2025,2,$17.10/kg,12.48,
+2024-03-04,"B2, B12",DTF-243591,RM-1750,Active,,Methylcobalamin (B12) 1%,NutraSci LLC,401774,3/4/2025,56.11,11.32,moved 1/12/25,recount,1,,,
+2024-04-06,A1 & C4,DTF-241791,RM-4657,Active,None,L-Theanine,Glanbia,LOT452374,4/6/2025,79.25,30.64,,ok 5/2025,1,$16.04/kg,491.34,y
+6/18/2025,A2,DTF-254570,RM-5374,QUARANTINE,None,Whey Protein Isolate 90%,Glanbia Nutr.,710646,6/18/2027,74.1,,Yes 3/2025,,1,$69.18,,
+1/27/2025,Cooler 1,DTF-254567,RM-4752,Active,None, Sucralose,Sensapure,B552895,1/27/2026,72.81,50.61,Yes 3/2025,OK,1,82.87,,
+9/22/2025,Cooler 1,DTF-256019,FL-7126,Hold,Soy, Green Apple Flavor Art,Glanbia,LOT138093,,112.72,35.59,,,2,132.85,4728.27,y
+4/17/2025,C7,DTF-259032,RM-7543,Active,Tree Nut (Coconut),MCT Oil Powder 70%,Anderson,792544,Apr 17 2026,77.9,15.29,Yes 3/2025,ok 5/2025,1,38.87,3028.31,y
+,A2 & Cooler 1 & C4,DTF-248407,RM-3340,,None,Silicon Dioxide,FlavorSum,721027,2027-06-19,42.51,,,,1,29.30,1245.42,
+2026-06-03,B12 & B1,DTF-262348,FL-9479,active,None,Cotton Candy Flavor Art,Flavor Sum,LOT593761,,17.25,17.14,,ok 5/2025,2,,1333.43,
+,B12,DTF-259140,RM-7572,Active,None,Monk Fruit Extract 25% MV,Blue California Inc.,B534369,5/30/2028,91.85,,Yes 3/2025,ok 5/2025,1, 30.21 ,876.09,
+,Rack 2 shelf 4,DTF-248308,FL-2040,QUARANTINE,,Fruit Punch Flavor N&A,Anderson,LOT481579,Mar 16 2026,55.68,4.77,,OK,2,70.35,335.56,y
+2025-02-25,A3,DTF-251754,FL-6573,Active,None,Vanilla Flavor Nat,Ingredion Inc,B290310,2026-02-25,2.5,1.84,moved 1/12/25,ok 5/2025,2,32.02,58.92,TRUE
+2026-01-11,C4 & B12 & A1,DTF-267382,FL-3103,QUARANTINE,None,Salted Caramel Flavor Nat,Prinova USA,B204760,2027-01-11,60.34,58.87,,recount,2,103.00,6214.97,
+4/12/2025,A2,DTF-250743,RM-7482,QUARANTINE,Soy,Malic Acid,Flavorsum LLC,LOT989981,Apr 12 2026,67.28,46.36,moved 1/12/25,,1,78.61,3644.45,
+4/11/2025,"A2, C4",DTF-252882,RM-1711,,, Melatonin,Ingredion,LOT488634,4/10/2028,106.39,63.5,Yes 3/2025,ok 5/2025,1,71.01,4508.96,TRUE
+9/1/2024,"Rack 2 shelf 4, B1",DTF-244773,RM-1520,QUARANTINE,None,Beta-Alanine,Anderson Advanced Ingredients,446802,9/1/2027,76.85,49.31,Yes 3/2025,,1,$6.12/kg,301.78,y
+2025-12-21,B12,DTF-258402,FL-5889,QUARANTINE,,LEMONADE FLAVOR NAT,NutraSci LLC,B808625,Jun 14 2027,47.9,13.29,Yes 3/2025,OK,2,134.89,1792.74,y
+2024-01-22,B1,DTF-243818,FL-6310,Active,None,Orange Cream Flavor N&A,Sensapure Flavors,B910104,,94.52,26.6,Yes 3/2025,,2,$81.14,2158.38,
+4/10/2024,C4,DTF-240961,RM-9935,Active,Tree Nut (Coconut), Creatine Monohydrate,Nutra Sci,B981524,2025-04-10,78.43,44.2,moved 1/12/25,recount,1,10.59,830.77,Yes
+8/25/2025,D2,DTF-253900,RM-1409,Active,,Caffeine Anhydrous,NutraSci,990957,Feb 16 2027,70.82,4.02,,ok 5/2025,1,71.95,289.22,
+9/5/2024,Cooler 1,DTF-246072,RM-3664,Active,Soy, Inulin (Chicory),Blue CA,B120665,9/5/2025,83.81,28.2,moved 1/12/25,,1,"37,87",,TRUE
+12/4/2024,"D2, A3",DTF-246889,RM-2674,active,Tree Nut (Coconut),Green Tea Extract 50% EGCG,Blue California,606750,12/4/2026,79.77,13.43,,OK,1,$13.17,176.93,Yes
+Mar 03 2024,A3,DTF-241077,FL-4923,Active,Milk,Grape Flavor Art,Ingredion Inc,B636410,3/3/2027,101.75,46.29,moved 1/12/25,,2, 22.03 ,1019.88,
+Jul 18 2024,A2,DTF-249264,,Active,None,Taurine,Prinova USA,LOT573723,7/18/2027,115.68,61.33,moved 1/12/25,recount,1, 33.89 ,2078.68,y
+7/7/2024,Cooler 1,DTF-243792,FL-3504,Active,None, Strawberry Flavor Nat,NutraSci LLC,B401329,7/7/2025,63.11,53.46,moved 1/12/25,ok 5/2025,,"99,08",5296.65,y
+2025-09-03,A1,DTF-250894,RM-4598,Hold,Milk,Stevia Extract Reb-A 97%,Ingredion,920647,2027-09-03,117.67,98.96,,recount,1,61.57,6093.17,Yes
+10/29/2024,D2 & C7,DTF-247802,,Active,,Zinc Gluconate,Anderson Adv Ing,B80437,10/29/2027,110.51,14.54,,,1, 46.31 ,673.34,TRUE
+3/27/2025,"A1, A3",DTF-259222,RM-4752,Active,None,Sucralose,Sensapure Flavors,811577,3/27/2027,22.53,2.23,,recount,1,$82.76,1864.49,Yes
+2024-12-11,B12,DTF-243674,RM-2307,active,None,Potassium Chloride,Ingredion,LOT269295,12/11/2027,33.75,,,,1,$77.89/kg,2507.34,TRUE
+2026-03-31,C4,DTF-265084,FL-2049,active,Soy,Mocha Flavor Nat,Sensapure,LOT545280,2029-03-30,99.93,92.31,,OK,2,$60.03/kg,5541.28,TRUE
+,D2,DTF-262948,RM-3803,active,None,Inulin (Chicory),Blue CA,229832,1/21/2029,116.15,92.09,,ok 5/2025,1,35.30,4100.60,
+10/24/2025,Rack 2 shelf 4 / A1,DTF-253083,RM-3677,,None,Collagen Peptides Type I&III,Glanbia,B963149,10/24/2026,110.71,94.63,,ok 5/2025,1, 41.06 ,3885.81,TRUE
+7/11/2024,Overflow,DTF-247942,RM-9830,Active,None,Maltodextrin DE10,Glanbia Nutr.,LOT754261,7/11/2026,74.9,39.22,moved 1/12/25,,1,26.82,1051.86,
+10/31/2024,"A3, B1",DTF-249044,RM-7572,Active,None, Monk Fruit Extract 25% MV,Blue CA,632656,10/31/2027,36.99,,Yes 3/2025,OK,1, 28.16 ,1041.59,Yes
+3/16/2026,Cooler 1,DTF-261699,FL-2040,,Soy,Fruit Punch Flavor N&A  ,Anderson Adv Ing,364992,Mar 16 2027,47.16,23.42,moved 1/12/25,ok 5/2025,2,call,3495.87,
+2025-11-25,B12,DTF-255083,FL-6573,active,Tree Nut (Coconut),Vanilla Flavor Nat  ,Ingredion,B596072,11/24/2028,34.46,25.42,,recount,2,,1129.42,TRUE
+1/19/2026,"D2, Overflow, B2",DTF-264211,FL-8433,,,Chocolate Flavor Nat,SensaPure Flavors Inc,922677,7/13/2027,11.27,3.72,,,2,16.55,61.55,
+8/8/2024,Rack 2 shelf 4,DTF-240898,FL-7537,Active,None,Sweetness Enhancer SE-11,Ingredion,LOT811280,8/8/2025,41.75,6.49,,ok 5/2025,2,$168.16,1091.36,
+1/29/2026,Rack 2 shelf 4,DTF-264027,RM-6925,QUARANTINE,Soy,Pyridoxine HCl (B6),Ingredion Inc,682865,2027-07-23,2.44,1.4,Yes 3/2025,,1, 55.63 ,77.88,y
+3/13/2024,B2 / A3,DTF-240978,RM-6155,Active,Milk,Citric Acid Anhydrous,Glanbia Nutr.,B470485,9/4/2025,110.91,88.55,moved 1/12/25,OK,1, 23.29 ,2582.98,Yes
+2024-04-27,Cooler 1,DTF-244382,FL-5342,Active,None,Masking Agent MSK-201,Prinova USA,B378074,4/27/2026,69.1,56.45,moved 1/12/25,,2,see PO,5625.82,TRUE
+,Overflow,DTF-266659,RM-3803,QUARANTINE,None,Pea Protein 80%,NutraSci LLC,524663,3/26/2028,41.17,,Yes 3/2025,,1,52.94,1931.93,
+11/26/2025,Overflow,DTF-255140,RM-4527,QUARANTINE,None,L-Carnitine Tartrate,PRINOVA,LOT277095,11/26/2027,112.74,17.99,,OK,1,96.17,10841.95,TRUE
+Sep 10 2024,"B1, Rack 2 shelf 4, D2",DTF-242696,FL-9479,Active,,COTTON CANDY FLAVOR ART,FlavorSum,621474,9/10/2025,63.3,34.93,moved 1/12/25,,2,,2789.18,y
+,A2,DTF-256956,RM-3340,Active,Tree Nut (Coconut),Silicon Dioxide,FlavorSum,318036,2/13/2028,107.41,44.82,Yes 3/2025,OK,1,$29.85,1337.99,TRUE
+8/20/2025,A2,DTF-257061,RM-7201,Active,Milk,Niacinamide,Nutra Sci,B57440,8/20/2027,6.31,2.0,,OK,1,$11.20/kg,22.41,
+1/6/2026,C7/B1/B12,DTF-267565,FL-2403,,Milk,Cherry Limeade Flavor N&A,NutraSci LLC,448997,,116.37,73.32,,OK,2,"129,66",9506.92,Yes
+5/11/2024,Overflow,DTF-243695,RM-4598,Active,Milk,Stevia Extract Reb-A 97%,Ingredion Inc,LOT675905,,92.25,15.92,Yes 3/2025,recount,1,$64.17/kg,,y
+1/14/2026,D2,DTF-265609,FL-7537,Hold,Soy,Sweetness Enhancer SE-11,Ingredion Inc,517699,1/14/2027,84.84,46.05,Yes 3/2025,,2,call,7571.65,
+2024-06-07,D2,DTF-242580,RM-1520,Active,None,Beta-Alanine,Anderson Advanced Ingredients,81262,2025-11-29,35.96,34.89,,recount,1,$6.80,244.45,y
+6/11/2025,C7,DTF-259223,FL-5889,Active,,Lemonade Flavor Nat,Nutra Sci,B716537,12/3/2026,39.69,25.1,Yes 3/2025,,2,see PO,,
+8/29/2024,C7/Overflow,DTF-249249,RM-4527,active,Soy,L-Carnitine Tartrate,PRINOVA,B168290,8/29/2025,18.0,4.27,Yes 3/2025,OK,1,"89,81",383.51,
+5/12/2024,C4/A1,DTF-241276,FL-9479,,Soy,Cotton Candy Flavor Art,Flavorsum LLC,B753963,2027-05-12,64.14,17.23,moved 1/12/25,,2, 83.02 ,1430.43,
+Dec 06 2024,B1 & Overflow & C7,DTF-245001,RM-7924,,None,Taurine,PRINOVA,LOT427821,12/6/2027,96.37,83.92,Yes 3/2025,OK,1,35.99,3468.74,Yes
+1/4/2026,B2,DTF-260723,RM-4611,Active,Soy,Zinc Gluconate,Anderson,B179430,2028-01-04,24.83,16.2,moved 1/12/25,recount,,$41.47,,
+3/4/2024,C7,DTF-247200,RM-4527,Hold,None,L-Carnitine Tartrate,Prinova USA,B438625,2027-03-04,12.87,11.64,,OK,1, 85.34 ,993.40,
+2026-05-23,B12,DTF-264177,FL-2403,Active,None,Cherry Limeade Flavor N&A,Nutra Sci,LOT105656,Nov 14 2027,51.89,46.37,,OK,2,"121,46",5632.16,y
+2025-10-20,B1,DTF-254928,RM-4598,,None,Stevia Extract Reb-A 97%,Ingredion,442723,,94.4,33.3,,ok 5/2025,1,63.08,2100.63,
+2025-02-11,D2 / A1,DTF-253847,FL-2040,active,Milk,Fruit Punch Flavor N&A,Anderson,LOT465052,,102.29,87.94,,ok 5/2025,2,77.29,6797.30,
+2024-08-07,A1,DTF-248701,FL-9348,Active,None, Blueberry Flavor Nat WONF,Prinova USA,B762204,1/29/2026,99.44,30.59,,,2,89.36,2733.66,
+1/3/2026,D2,DTF-267757,RM-4811,Active,None,Citrulline Malate 2:1,Glanbia Nutritionals,B384314,Jan 02 2029,4.92,,Yes 3/2025,OK,1,$51.17/kg,60.90,
+2024-11-16,C4,DTF-243044,,QUARANTINE,None,Taurine,Prinova USA,B157111,11/16/2025,29.01,4.67,,OK,1,33.08,154.50,Yes
+2024-08-30,B2,DTF-246524,RM-7924,active,,Taurine,Prinova USA,87333,8/30/2027,3.64,2.1,,ok 5/2025,1,"33,05",69.41,y
+5/30/2026,Cooler 1,DTF-264296,FL-9201,Hold,Tree Nut (Coconut),Peach Mango Flavor N&A,Ingredion Inc,LOT717617,5/29/2029,116.09,,Yes 3/2025,recount,2,"124,63",11782.10,
+5/14/2024,A2,DTF-241042,FL-6947,QUARANTINE,,Pineapple Flavor Nat WONF,Sensapure Flavors,B538313,5/14/2025,43.31,34.61,Yes 3/2025,ok 5/2025,2,147.79,5115.14,
+,C7,DTF-262199,FL-7537,,,Sweetness Enhancer SE-11,Ingredion,B180387,2028-06-11,105.27,6.19,,,2,164.65,17332.47,
+Feb 09 2025,B1 & Rack 2 shelf 4,DTF-253589,FL-6573,active,None,Vanilla Flavor Nat,Ingredion,111883,Feb 09 2027,1.47,1.28,Yes 3/2025,ok 5/2025,,see PO,,
+2024-10-31,Overflow,DTF-245232,RM-6155,active,Soy,Citric Acid Anhydrous,Glanbia Nutritionals,B549995,2027-10-31,9.22,0.99,moved 1/12/25,,1,$22.46,22.24,
+Oct 30 2025,Rack 2 shelf 4,DTF-253805,RM-7482,Hold,None,Malic Acid,FlavorSum,B935100,Oct 29 2028,57.56,13.78,,ok 5/2025,1,89.11,1228.00,
+12/8/2025,"A1, B12, B1",DTF-251685,RM-1106,Active,Tree Nut (Coconut),Magnesium Citrate,Ingredion,LOT916604,6/1/2027,65.7,55.38,,ok 5/2025,,71.79,3975.48,TRUE
+Mar 12 2026,Cooler 1,DTF-263969,FL-6947,Active,None,Pineapple Flavor Nat WONF,sensapure flavors,B449122,9/3/2027,86.71,52.4,moved 1/12/25,recount,2,$135.88,7120.02,Yes
+11/21/2025,A3/Overflow,DTF-255302,FL-8433,Active,None,Chocolate Flavor Nat,Sensapure,B800371,5/15/2027,21.47,18.54,,OK,2,"17,01",315.34,TRUE
+2024-04-27,B2,DTF-241772,RM-7227,Hold,None,Sodium Citrate,NutraSci LLC,962134,,56.07,16.45,,,1,$27.73,,TRUE
+2024-11-09,B2,DTF-243778,RM-3677,Active,None,Collagen Peptides Type I&III,Glanbia Nutr.,809213,2026-11-09,57.05,31.63,moved 1/12/25,OK,1, 43.98 ,1391.01,y
+2/9/2026,C7 & D2,DTF-269781,,QUARANTINE,Tree Nut (Coconut),Sodium Citrate,Nutra Sci,B896589,2/9/2027,69.49,56.25,Yes 3/2025,recount,1,28.67,1612.67,TRUE
+2025-04-16,"A1, B1",DTF-251103,RM-1750,Active,None,Methylcobalamin (B12) 1%,NutraSci LLC,924581,4/16/2027,19.04,4.36,moved 1/12/25,ok 5/2025,1,"66,65",290.61,
+10/22/2024,D2,DTF-246221,FL-2049,QUARANTINE,Soy,Mocha Flavor Nat,Sensapure,B54109,4/15/2026,82.98,42.7,Yes 3/2025,ok 5/2025,2,$65.04,,TRUE
+3/24/2025,Rack 2 shelf 4 / Overflow,DTF-254416,RM-7482,Hold,None,Malic Acid,FlavorSum,B554173,2026-03-24,71.97,64.41,,recount,1,$85.44,5503.24,Yes
+9/30/2024,D2,DTF-246181,FL-9348,QUARANTINE,Soy,Blueberry Flavor Nat WONF,PRINOVA,LOT609573,9/30/2025,34.3,11.44,moved 1/12/25,,2,call,3080.00,Yes
+2025-07-13,C7 / A3,DTF-256456,RM-1750,Hold,None,METHYLCOBALAMIN (B12) 1%,Nutra Sci,LOT918959,1/4/2027,58.84,,moved 1/12/25,OK,1,61.91,1126.78,
+3/25/2024,B2,DTF-247287,FL-5342,Active,Milk,CITRULLINE MALATE 2:1,Glanbia Nutritionals,LOT461914,3/25/2026,18.93,13.74,moved 1/12/25,,, 49.68 ,682.61,
+3/15/2026,D2,DTF-265492,RM-6881,Active,None,Ashwagandha Extract KSM-66,NutraSci,LOT164511,3/14/2028,56.07,26.36,moved 1/12/25,recount,1,$74.02,,
+Mar 02 2024,B2,DTF-249838,FL-3103,Active,Soy,SALTED CARAMEL FLAVOR NAT,PRINOVA,LOT172246,2026-03-02,80.57,35.47,,OK,2,,4297.05,
+1/30/2024,"A3, Overflow",DTF-241294,FL-9669,Hold,Tree Nut (Coconut),Blue Raspberry Flavor Art,FlavorSum,B967170,2025-01-29,39.26,4.06,Yes 3/2025,ok 5/2025,2,51.03,207.17,
+4/11/2024,C7 / Rack 2 shelf 4,DTF-241299,RM-3803,Active,Milk,Pea Protein 80%,NutraSci,995898,2026-04-11,95.07,17.18,,OK,1,"48,81",838.49,
+2024-02-10,C4,DTF-242145,RM-4811,active,Milk,Citrulline Malate 2:1,Glanbia Nutritionals,LOT490547,2025-02-09,50.6,30.59,,,1,,1487.47,y
+10/12/2025,D2,DTF-252223,FL-5889,QUARANTINE,,Lemonade Flavor Nat,NutraSci LLC,576432,10/11/2028,109.17,36.8,,ok 5/2025,2,137.27,14985.70,Yes
+,A2,DTF-257214,FL-3504,Active,, Strawberry Flavor Nat,NutraSci,B923239,2028-12-22,46.64,31.74,moved 1/12/25,OK,2,call,5358.83,TRUE
+5/18/2024,D2 / A3 / B12,DTF-242925,FL-2049,Hold,Tree Nut (Coconut),Mocha Flavor Nat,Sensapure,LOT802911,5/18/2027,45.25,40.58,moved 1/12/25,recount,2,,2623.25,
+5/31/2025,Cooler 1,DTF-254544,RM-7201,,,Niacinamide,Nutra Sci,B91247,2028-05-30,99.75,56.91,Yes 3/2025,OK,1, 11.85 ,674.30,
+,B2,DTF-251658,RM-3340,Hold,None,Silicon Dioxide,Flavorsum LLC,LOT636258,6/4/2027,2.68,0.92,,ok 5/2025,,29.73,79.68,
+2024-04-03,C4,DTF-249013,RM-3340,Active,,SILICON DIOXIDE,Flavor Sum,B131552,,42.08,15.43,,recount,1,$28.23/kg,435.54,
+6/19/2024,D2,DTF-248500,FL-4923,Hold,None,Stevia Extract Reb-A 97%,Ingredion Inc,B819859,2025-06-19,67.8,44.94,,OK,1,call,4473.42,Yes
+7/21/2025,C4,DTF-251503,RM-4752,Active,,Sucralose,Sensapure Flavors,B65843,7/21/2026,85.51,46.19,moved 1/12/25,,1,70.56,3259.31,
+2024-11-03,A1,DTF-242808,RM-6925,Active,,Pyridoxine HCl (B6),Ingredion Inc,909636,,78.62,68.03,,,1,57.51,3912.46,TRUE
+9/14/2024,Rack 2 shelf 4,DTF-246225,RM-4811,,Soy,Sucralose,sensapure flavors,633266,3/8/2026,86.65,45.15,,ok 5/2025,1,$77.91,3517.68,Yes
+Sep 28 2024,Rack 2 shelf 4 / Cooler 1,DTF-249087,RM-4257,Active,None,Ascorbic Acid (Vitamin C),Sensapure,B131035,Mar 22 2026,112.02,99.34,,OK,1,71.86,7138.93,
+,D2,DTF-252779,FL-6573,active,Tree Nut (Coconut),Ascorbic Acid (Vitamin C),SensaPure Flavors Inc,B291444,9/3/2027,103.71,6.4,moved 1/12/25,OK,1,"65,76",,Yes
+11/24/2025,C4,DTF-253023,,Active,Tree Nut (Coconut),Zinc Gluconate,Anderson,935994,5/18/2027,111.63,84.11,moved 1/12/25,,1,$43.62,3668.96,
+2024-02-01,Rack 2 shelf 4 / Overflow,DTF-240862,FL-9835,Active,None,Bitter Blocker BB-40,Glanbia Nutritionals,95544,1/31/2025,89.66,22.81,moved 1/12/25,recount,2,125.01,2851.42,
+4/9/2024,B12,DTF-243111,RM-4527,,None,L-Carnitine Tartrate,PRINOVA,B532987,Apr 09 2025,35.18,14.6,,ok 5/2025,1,90.04,3167.56,
+9/4/2024,Overflow,DTF-246854,FL-6310,Hold,None,Whey Protein Isolate 90%,Glanbia,949001,Sep 04 2026,79.21,57.78,,,1,69.36,5494.36,TRUE
+2026-04-03,C4/B2,DTF-264950,FL-2876,Active,Tree Nut (Coconut),Watermelon Flavor Nat WONF,Sensapure Flavors,LOT409889,2029-04-02,108.19,75.05,Yes 3/2025,,2,108.34,8130.71,TRUE
+5/21/2024,B1,DTF-246884,RM-6925,QUARANTINE,None,Pyridoxine HCl (B6),Ingredion Inc,B16182,,28.14,19.96,moved 1/12/25,ok 5/2025,1,56.94,1136.53,TRUE
