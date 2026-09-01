@@ -1,0 +1,4 @@
+# Test dependencies only. The pipeline itself stays stdlib-only (see SPEC.md
+# section 3) — pytest is here so `python -m pytest` works, not because the
+# ETL needs it.
+pytest>=8.0
