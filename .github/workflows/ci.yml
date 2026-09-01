@@ -1,0 +1,45 @@
+# Runs the whole pipeline end to end on every push and pull request.
+#
+# The point is not unit-test coverage (pytest does that) but proving the four
+# commands in the README quickstart still work together on a clean machine:
+# a bot commits here daily, and "the tests passed" is not the same as "the ETL
+# still runs". Each step below fails the job on a non-zero exit, so a crash in
+# the generator, the load, or the report is caught the same as a failing test.
+#
+# One job, no matrix, one Python version — the smallest thing that answers
+# "did today's commit break it?".
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The pipeline itself is stdlib-only; this installs pytest and nothing
+      # else, so a new third-party import in dtf_materials/ fails here rather
+      # than passing quietly.
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Generate the synthetic sheet
+        run: python scripts/generate_synthetic_sheet.py
+
+      - name: Run the ETL
+        run: python -m dtf_materials.etl
+
+      - name: Run the data-quality report
+        run: python -m dtf_materials.quality_report
+
+      - name: Run the test suite
+        run: python -m pytest

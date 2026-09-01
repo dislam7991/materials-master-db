@@ -1,5 +1,7 @@
 # DTF Materials Master
 
+[![CI](https://github.com/dislam7991/materials-master-db/actions/workflows/ci.yml/badge.svg)](https://github.com/dislam7991/materials-master-db/actions/workflows/ci.yml)
+
 A small internal data platform for a supplement contract manufacturer with no ERP:
 a SQLite materials master database, a Python ETL pipeline that feeds it from the
 company's inventory spreadsheet, a data-quality report that surfaces the mess the

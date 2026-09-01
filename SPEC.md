@@ -121,7 +121,7 @@ done (DoD). Do them in order; later tasks assume earlier ones.
       *Why: these are the bugs that actually happened; tests stop them
       regressing.*
       DoD: `python -m pytest` covers and passes all three.
-- [ ] **A3. GitHub Actions CI.** One workflow: on push, install nothing (ETL
+- [x] **A3. GitHub Actions CI.** One workflow: on push, install nothing (ETL
       is stdlib-only), run the generator, the ETL, the quality report, and
       pytest. Badge in README.
       *Why: with a bot committing daily, an automated "did it break"
@@ -237,11 +237,6 @@ Things that came up mid-task and are deliberately not built yet (rule 4).
   Decide it with evidence from **B3** — the first real run tells us how
   often these actually occur — not from guesswork now.
 
-- **The committed synthetic CSV is stale.** `scripts/generate_synthetic_sheet.py`
-  is deterministic run-to-run (`SEED = 42`), but re-running it now rewrites
-  every row of `data/synthetic/raw_material_inventory.csv` — the committed
-  file predates a later change to the generator. Nothing is broken (the ETL
-  and quality report both run clean against either version), but it means
-  any task that runs the generator produces an unrelated diff. Left alone
-  because it is not A1's DoD; fold the regenerate into **A3**, which runs
-  the generator in CI anyway and will otherwise show a dirty tree.
+- ~~**The committed synthetic CSV is stale.**~~ Resolved in A3: the file was
+  regenerated from the current `scripts/generate_synthetic_sheet.py`, so a
+  local generator run no longer produces a spurious diff.
