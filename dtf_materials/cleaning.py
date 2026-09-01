@@ -164,46 +164,8 @@ def normalize_key(value: str | None) -> str | None:
 # Alias kept for call sites that name the specific use case.
 normalize_supplier_key = normalize_key
 
-
-if __name__ == "__main__":
-    # Quick self-check against the exact dirty formats the generator injects.
-    assert parse_date("5/1/2025") == "2025-05-01"
-    assert parse_date("2024-03-04") == "2024-03-04"
-    assert parse_date("Oct 19 2024") == "2024-10-19"
-    assert parse_date("") is None
-    assert parse_date(None) is None
-
-    assert parse_price("117.38") == 117.38
-    assert parse_price("$17.10/kg") == 17.10
-    assert parse_price(" 18.00 ") == 18.00
-    assert parse_price("17,10") == 17.10
-    assert parse_price("$1,234.56") == 1234.56
-    assert parse_price("1.234,56") == 1234.56
-    assert parse_price("TBD") is None
-    assert parse_price("call") is None
-    assert parse_price("") is None
-
-    assert split_locations("6L-27-D") == ["6L-27-D"]
-    assert split_locations("6R-09-E, 6R-10-C, 6R-13-C") == ["6R-09-E", "6R-10-C", "6R-13-C"]
-    assert split_locations("6L-27-D,6L-28-D") == ["6L-27-D", "6L-28-D"]
-    assert split_locations("6R-09-E 6R-10-C") == ["6R-09-E", "6R-10-C"]   # space-separated codes
-    assert split_locations("back cooler") == ["BACK COOLER"]              # free text stays whole
-    assert split_locations("cooler") == ["COOLER"]
-    assert split_locations("6l-27-d / 6L-27-D") == ["6L-27-D"]            # case-folded dedupe
-    assert split_locations("") == []
-    assert split_locations(None) == []
-
-    assert is_standard_location("6L-27-D")
-    assert is_standard_location("cooler")
-    assert not is_standard_location("back cooler")
-    assert not is_standard_location("6L-27-")
-    assert not is_standard_location(None)
-
-    assert normalize_supplier_key("Sensapure Flavors") == normalize_supplier_key("sensapure flavors")
-    assert normalize_supplier_key("NutraSci") != normalize_supplier_key("Nutra Sci")
-
-    assert parse_category("1") == "raw"
-    assert parse_category("2 Flavor") == "flavor"
-    assert parse_category("") is None
-
-    print("cleaning.py self-checks passed")
+# The self-checks that used to live here in an `if __name__ == "__main__"`
+# block now live in `tests/test_cleaning.py`, so they run on every
+# `python -m pytest` instead of only when someone remembered to execute this
+# module by hand. Every case moved across unchanged, plus the known edge
+# formats (two-digit years, "12.50 USD", trailing location separators).

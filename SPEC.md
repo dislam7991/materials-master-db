@@ -106,7 +106,7 @@ done (DoD). Do them in order; later tasks assume earlier ones.
 
 ### Phase A — Harden what exists (makes daily automation safe)
 
-- [ ] **A1. Pytest suite for `cleaning.py`.** Move the `__main__`
+- [x] **A1. Pytest suite for `cleaning.py`.** Move the `__main__`
       self-checks into `tests/test_cleaning.py`, keep every existing case,
       add the known edge cases (dates: `1/5/25`, `Jan 5, 2026`; prices:
       `(15.00)`, `12.50 USD`; locations: trailing separators).
@@ -221,3 +221,27 @@ Listed so the daily automation never "helpfully" adds them:
    `## Backlog` section at the bottom of this file, not into code.
 5. Never commit: `db/*.db`, `data/real/`, `config.local.toml`, service
    account keys, or any real material name, price, supplier, or client.
+
+## Backlog
+
+Things that came up mid-task and are deliberately not built yet (rule 4).
+
+- **Should `cleaning.py` learn more formats?** A1 added tests for the four
+  listed edge inputs; all four currently return None and so land in the
+  quality report rather than being parsed: `1/5/25` (two-digit year),
+  `Jan 5, 2026` (comma after the day), `12.50 USD` (trailing currency code),
+  `(15.00)` (accounting negative). Teaching the parser the first three is a
+  few lines each; `(15.00)` should probably stay unparsed, since neither
+  `15.00` nor `-15.00` is a defensible price to invent. Left alone because
+  widening what the parser accepts is a behavior change, not A1's DoD.
+  Decide it with evidence from **B3** — the first real run tells us how
+  often these actually occur — not from guesswork now.
+
+- **The committed synthetic CSV is stale.** `scripts/generate_synthetic_sheet.py`
+  is deterministic run-to-run (`SEED = 42`), but re-running it now rewrites
+  every row of `data/synthetic/raw_material_inventory.csv` — the committed
+  file predates a later change to the generator. Nothing is broken (the ETL
+  and quality report both run clean against either version), but it means
+  any task that runs the generator produces an unrelated diff. Left alone
+  because it is not A1's DoD; fold the regenerate into **A3**, which runs
+  the generator in CI anyway and will otherwise show a dirty tree.
