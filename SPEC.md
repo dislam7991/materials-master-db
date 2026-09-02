@@ -114,7 +114,7 @@ done (DoD). Do them in order; later tasks assume earlier ones.
       cheapest possible CI foundation.*
       DoD: `python -m pytest` passes; self-check block in `cleaning.py`
       replaced by a pointer to the tests.
-- [ ] **A2. Pytest for the ETL invariants.** Encode the three audit probes
+- [x] **A2. Pytest for the ETL invariants.** Encode the three audit probes
       as tests: (1) material ids stable under a re-sorted source, (2) crash
       mid-load leaves prior data intact, (3) two consecutive runs produce
       identical tables. Use a temp DB and the synthetic CSV.
