@@ -4,13 +4,18 @@ Runs against `staging_inventory_raw`, independent of whether the load into
 materials/lots succeeded — the point is to show the mess the sheet-only
 workflow creates, including rows too broken to load at all. Run the ETL
 first (`python -m dtf_materials.etl`) so staging is populated.
+
+`--out report.md` additionally writes the findings as Markdown, so the mess
+can be linked from the README or handed to someone at work who is never
+going to run a Python command.
 """
 
 from __future__ import annotations
 
 import argparse
-from collections import defaultdict
+from collections import Counter, defaultdict
 from difflib import SequenceMatcher
+from pathlib import Path
 
 from . import cleaning
 from .db import DEFAULT_DB_PATH, connect
@@ -97,83 +102,124 @@ def report(db_path=DEFAULT_DB_PATH) -> dict:
     return findings
 
 
-def print_report(findings: dict) -> None:
-    total_flags = sum(len(v) for v in findings.values())
-    print(f"=== Data Quality Report ===  ({total_flags} findings)\n")
+def build_sections(findings: dict) -> list[tuple[str, list[str]]]:
+    """The report's content as (heading, detail lines) pairs.
+
+    Content is built once here and rendered twice below, so the terminal
+    output and the Markdown file cannot drift apart — the whole value of the
+    file is that it says exactly what the run said. Detail lines carry no
+    indentation; each renderer indents or fences them itself.
+    """
+    sections: list[tuple[str, list[str]]] = []
+
+    def add(heading: str, details: list[str] | None = None) -> None:
+        sections.append((heading, details or []))
 
     if findings["missing_part_num"]:
         rows = findings["missing_part_num"]
-        print(f"[{len(rows)}] Rows with no DTF Part # (can't be linked to a material):")
-        print(f"    source rows: {rows}\n")
+        add(f"[{len(rows)}] Rows with no DTF Part # (can't be linked to a material):",
+            [f"source rows: {rows}"])
 
     if findings["conflicting_part_num"]:
-        print(f"[{len(findings['conflicting_part_num'])}] DTF Part #s reused across different material names:")
-        for part_num, names, source_rows in findings["conflicting_part_num"]:
-            print(f"    {part_num}: {names}  (source rows: {source_rows})")
-        print()
+        add(f"[{len(findings['conflicting_part_num'])}] DTF Part #s reused across different material names:",
+            [f"{part_num}: {names}  (source rows: {source_rows})"
+             for part_num, names, source_rows in findings["conflicting_part_num"]])
 
     if findings["part_num_multiple_suppliers"]:
-        print(f"[{len(findings['part_num_multiple_suppliers'])}] Part #s listed under more than one supplier "
-              f"(only the first is kept on the material row):")
-        for part_num, sups in findings["part_num_multiple_suppliers"][:10]:
-            print(f"    {part_num}: {sups}")
-        print()
+        add(f"[{len(findings['part_num_multiple_suppliers'])}] Part #s listed under more than one supplier "
+            f"(only the first is kept on the material row):",
+            [f"{part_num}: {sups}"
+             for part_num, sups in findings["part_num_multiple_suppliers"][:10]])
 
     if findings["nonstandard_location"]:
-        from collections import Counter
         counts = Counter(loc for _, loc in findings["nonstandard_location"])
-        print(f"[{len(findings['nonstandard_location'])}] Locations not matching the expected code "
-              f"format (e.g. 6L-27-D) or a known named location:")
+        details = []
         for loc, count in counts.most_common(10):
             rows_for = [n for n, l in findings["nonstandard_location"] if l == loc][:4]
-            print(f"    {loc!r}  x{count}  (rows {rows_for}{'...' if count > 4 else ''})")
-        print("    -> a repeated value here is usually a real named location to whitelist;")
-        print("       a one-off is usually a typo.\n")
+            details.append(f"{loc!r}  x{count}  (rows {rows_for}{'...' if count > 4 else ''})")
+        details.append("-> a repeated value here is usually a real named location to whitelist;")
+        details.append("   a one-off is usually a typo.")
+        add(f"[{len(findings['nonstandard_location'])}] Locations not matching the expected code "
+            f"format (e.g. 6L-27-D) or a known named location:", details)
 
     if findings["missing_location"]:
-        print(f"[{len(findings['missing_location'])}] Rows with no location.\n")
+        add(f"[{len(findings['missing_location'])}] Rows with no location.")
 
     if findings["nonpositive_price"]:
-        print(f"[{len(findings['nonpositive_price'])}] Rows with a zero or negative price:")
-        for n, val in findings["nonpositive_price"][:10]:
-            print(f"    row {n}: {val!r}")
-        print()
+        add(f"[{len(findings['nonpositive_price'])}] Rows with a zero or negative price:",
+            [f"row {n}: {val!r}" for n, val in findings["nonpositive_price"][:10]])
 
     if findings["possible_duplicate_supplier"]:
-        print(f"[{len(findings['possible_duplicate_supplier'])}] Supplier spellings that look like the same company:")
-        for a, b, ratio in findings["possible_duplicate_supplier"]:
-            print(f"    '{a}'  ~  '{b}'   (similarity {ratio})")
-        print()
+        add(f"[{len(findings['possible_duplicate_supplier'])}] Supplier spellings that look like the same company:",
+            [f"'{a}'  ~  '{b}'   (similarity {ratio})"
+             for a, b, ratio in findings["possible_duplicate_supplier"]])
 
     if findings["unparseable_price"]:
-        print(f"[{len(findings['unparseable_price'])}] Prices that couldn't be parsed as numbers:")
-        for n, val in findings["unparseable_price"][:15]:
-            print(f"    row {n}: {val!r}")
+        details = [f"row {n}: {val!r}" for n, val in findings["unparseable_price"][:15]]
         if len(findings["unparseable_price"]) > 15:
-            print(f"    ... and {len(findings['unparseable_price']) - 15} more")
-        print()
+            details.append(f"... and {len(findings['unparseable_price']) - 15} more")
+        add(f"[{len(findings['unparseable_price'])}] Prices that couldn't be parsed as numbers:", details)
 
     if findings["missing_price"]:
-        print(f"[{len(findings['missing_price'])}] Rows with a blank price.\n")
+        add(f"[{len(findings['missing_price'])}] Rows with a blank price.")
 
     if findings["unparseable_receiving_date"]:
-        print(f"[{len(findings['unparseable_receiving_date'])}] Receiving dates that couldn't be parsed:")
-        for n, val in findings["unparseable_receiving_date"][:15]:
-            print(f"    row {n}: {val!r}")
-        print()
+        add(f"[{len(findings['unparseable_receiving_date'])}] Receiving dates that couldn't be parsed:",
+            [f"row {n}: {val!r}" for n, val in findings["unparseable_receiving_date"][:15]])
 
     if findings["missing_receiving_date"]:
-        print(f"[{len(findings['missing_receiving_date'])}] Rows with a blank receiving date.\n")
+        add(f"[{len(findings['missing_receiving_date'])}] Rows with a blank receiving date.")
 
     if findings["missing_category"]:
-        print(f"[{len(findings['missing_category'])}] Rows with a blank category.\n")
+        add(f"[{len(findings['missing_category'])}] Rows with a blank category.")
+
+    return sections
+
+
+def format_text(findings: dict) -> str:
+    """The terminal rendering: heading, then its details indented under it."""
+    total_flags = sum(len(v) for v in findings.values())
+    lines = [f"=== Data Quality Report ===  ({total_flags} findings)", ""]
+    for heading, details in build_sections(findings):
+        lines.append(heading)
+        lines.extend(f"    {detail}" for detail in details)
+        lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+def format_markdown(findings: dict) -> str:
+    """The same findings as `format_text`, as a linkable Markdown artifact.
+
+    Detail lines stay inside fenced blocks instead of being reflowed as
+    prose. They quote raw cell values verbatim (`'1L-28-'`, `'12.50 USD'`),
+    and escaping those for Markdown would risk the file misrepresenting what
+    is actually in the sheet — which is the one thing this report is for.
+    """
+    total_flags = sum(len(v) for v in findings.values())
+    lines = ["# Data Quality Report", "", f"{total_flags} findings in the staged inventory sheet.", ""]
+    for heading, details in build_sections(findings):
+        lines.append(f"## {heading}")
+        lines.append("")
+        if details:
+            lines.extend(["```", *details, "```", ""])
+    return "\n".join(lines) + "\n"
+
+
+def print_report(findings: dict) -> None:
+    print(format_text(findings), end="")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Data-quality report on the staged inventory sheet.")
     parser.add_argument("--db", default=str(DEFAULT_DB_PATH))
+    parser.add_argument("--out", metavar="PATH",
+                        help="also write the findings to PATH as Markdown (e.g. --out report.md)")
     args = parser.parse_args()
-    print_report(report(args.db))
+    findings = report(args.db)
+    print_report(findings)
+    if args.out:
+        Path(args.out).write_text(format_markdown(findings), encoding="utf-8")
+        print(f"Wrote Markdown report to {args.out}")
 
 
 if __name__ == "__main__":
