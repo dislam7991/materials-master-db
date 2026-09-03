@@ -126,6 +126,10 @@ finds every kind of dirtiness injected by the generator: rows with no Part #,
 Part #s reused across conflicting material names, supplier spellings that
 look like the same company, and unparseable/blank prices and dates — each
 finding cites the exact source row number.
+[docs/quality_report_sample.md](docs/quality_report_sample.md) is one such
+run, written by `python -m dtf_materials.quality_report --out PATH`, which
+saves the same findings the command prints as a Markdown file you can link
+or hand to someone who will never run a Python command.
 
 ## Schema design
 

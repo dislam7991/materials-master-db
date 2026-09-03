@@ -127,7 +127,7 @@ done (DoD). Do them in order; later tasks assume earlier ones.
       *Why: with a bot committing daily, an automated "did it break"
       check is not optional. One job, no matrix — minimum useful CI.*
       DoD: green run on `master`; badge renders.
-- [ ] **A4. Quality report to file.** `--out report.md` flag writing the
+- [x] **A4. Quality report to file.** `--out report.md` flag writing the
       findings as Markdown (same content as stdout).
       *Why: a linkable artifact for the README and for showing the mess at
       work; trivial scope.*
@@ -236,6 +236,14 @@ Things that came up mid-task and are deliberately not built yet (rule 4).
   widening what the parser accepts is a behavior change, not A1's DoD.
   Decide it with evidence from **B3** — the first real run tells us how
   often these actually occur — not from guesswork now.
+
+- **The committed sample report can go stale.** `docs/quality_report_sample.md`
+  is a snapshot: change the report's wording or the generator's seed and the
+  committed file silently stops matching what the tool now prints. A CI step
+  regenerating it and failing on a diff would fix that in about four lines,
+  but it also makes every wording tweak a two-file change, and the file is
+  illustrative rather than load-bearing. Left alone; revisit only if it is
+  ever found to be wrong in a way that misled someone.
 
 - ~~**The committed synthetic CSV is stale.**~~ Resolved in A3: the file was
   regenerated from the current `scripts/generate_synthetic_sheet.py`, so a
