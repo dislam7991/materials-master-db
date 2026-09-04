@@ -135,7 +135,7 @@ done (DoD). Do them in order; later tasks assume earlier ones.
 
 ### Phase B — Real inventory source (the point of the project)
 
-- [ ] **B1. Local config loader.** `config.local.toml` (already gitignored)
+- [x] **B1. Local config loader.** `config.local.toml` (already gitignored)
       read via stdlib `tomllib`: sheet ID, tab name, service-account key
       path. Committed `config.example.toml` documents the shape. No secrets
       in the repo, ever.
@@ -244,6 +244,12 @@ Things that came up mid-task and are deliberately not built yet (rule 4).
   but it also makes every wording tweak a two-file change, and the file is
   illustrative rather than load-bearing. Left alone; revisit only if it is
   ever found to be wrong in a way that misled someone.
+
+- **Should the config loader check that the key file exists?** B1 validates the
+  three keys but not the file `service_account_key_path` points at, so a typo
+  there surfaces as a Google auth error rather than a config error. Left alone
+  because B2 has to handle an unusable key anyway (revoked, wrong sheet shared,
+  no network), and one clear failure path there beats two half-checks.
 
 - ~~**The committed synthetic CSV is stale.**~~ Resolved in A3: the file was
   regenerated from the current `scripts/generate_synthetic_sheet.py`, so a
