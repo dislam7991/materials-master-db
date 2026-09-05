@@ -178,6 +178,42 @@ done (DoD). Do them in order; later tasks assume earlier ones.
       Queries in `queries.py`, UI in `app.py`, same separation as now.
       DoD: both directions visible in the app against synthetic data.
 
+### Phase E — Flavor sample database (second live sheet)
+
+A separate Google Sheet on a personal (non-company) account, shared with
+other R&D staff: a catalog of flavor sample materials and their info. Not
+the same thing as Phase C's sample *requests* — this is closer to a second
+inventory source, and unlike the main sheet, most rows won't have a DTF
+Part # yet (samples-in-waiting, not yet adopted into real inventory). The
+schema already has a place for exactly this: `materials.is_sample_only` and
+a nullable `dtf_part_num` exist for this case specifically.
+
+Real, unresolved prep work sits in front of any code here — the sheet's
+data needs to be understood and cleaned up before it can be loaded, the
+same way the main sheet was.
+
+- [ ] **E1. Get read access and map the sheet's real structure.** Document
+      its actual columns, naming quirks, and known dirtiness in
+      `docs/flavor_sample_sheet_layout.md`, the same way the main sheet's
+      shape was established before B2 was built. No code yet.
+      *Why: the main sheet's own header row had three whitespace quirks
+      EXPECTED_HEADERS didn't anticipate, found only by actually running
+      against it. Assume this sheet has its own surprises and find them by
+      looking, not by guessing.*
+      DoD: layout doc committed; no code changes.
+- [ ] **E2. Decide the identifier strategy and cleanup plan.** Most rows
+      have no DTF Part # yet — decide what identifies a row instead (a
+      vendor code? a temporary sample id?) and what "clean enough to load"
+      means for this sheet specifically.
+      *Why: this is real, unresolved messiness the user flagged directly,
+      not a coding problem. Settling the identifier shape before writing
+      cleaning/loading logic avoids building it around a wrong assumption.*
+      DoD: a short design note (same doc as E1, or a new one) naming the
+      identifier strategy and the specific dirt it has to handle.
+- [ ] **E3. Build the source + load path.** Not yet scoped — deliberately
+      left open until E1/E2 are done, rather than guessing at a DoD before
+      the sheet's real shape and identifier strategy are known.
+
 ### Phase D — Portfolio polish (last, small)
 
 - [ ] **D1. README top section rewrite**: 3-sentence problem statement, a
