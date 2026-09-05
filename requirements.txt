@@ -1,4 +1,5 @@
 # The pipeline itself (schema, ETL, cleaning, quality report) is stdlib-only
 # and needs nothing here. These are only for the lookup app.
-streamlit>=1.40
+streamlit>=1.49  # st.dataframe's width="stretch"/"content" needs this; older versions take width as a pixel int
 pandas>=2.0
+streamlit-searchbox>=0.1.15

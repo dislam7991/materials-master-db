@@ -16,4 +16,9 @@ tab_name = "Raw Material Inventory"
 # Path to the Google service account JSON key, absolute or relative to this
 # file. Share the sheet with that account's email as a *viewer* — this project
 # never writes back to the sheet.
+#
+# On Windows, use forward slashes (C:/Users/you/key.json) even though
+# Explorer shows backslashes — TOML treats "\" as an escape character in a
+# quoted string, so a raw Windows path breaks parsing. Forward slashes work
+# fine on Windows too.
 service_account_key_path = "credentials/service_account.json"

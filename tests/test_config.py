@@ -46,8 +46,12 @@ def test_valid_config_returns_typed_values(tmp_path):
 
 def test_absolute_key_path_is_left_alone(tmp_path):
     absolute = tmp_path / "keys" / "sa.json"
+    # as_posix(), not str(): on Windows, str() gives backslashes, and TOML's
+    # double-quoted strings treat "\" as an escape character (so "\Users"
+    # gets parsed as a broken \U-escape). Forward slashes need no escaping
+    # and Path() accepts them equally on every platform.
     config = load_sheets_config(write_config(
-        tmp_path, VALID.replace("credentials/service_account.json", str(absolute))
+        tmp_path, VALID.replace("credentials/service_account.json", absolute.as_posix())
     ))
 
     assert config.service_account_key_path == absolute
