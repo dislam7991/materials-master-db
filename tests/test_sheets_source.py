@@ -16,6 +16,20 @@ gspread = pytest.importorskip("gspread")
 from dtf_materials.sources.base import EXPECTED_HEADERS
 from dtf_materials.sources.sheets_source import SheetHeaderError, SheetsInventorySource
 
+# The real company sheet's actual header row, copied verbatim (blank cells
+# and all) from a live run against it. Three of these differ from
+# EXPECTED_HEADERS only in whitespace — "Lot / Batch" vs "Lot/Batch", a
+# trailing space on "Current Stock " and "Price Per Kilo ", and a space
+# between the two parenthetical bits in "Category (1 Raw) (2 Flavor)" —
+# which is exactly what _normalize_header exists to collapse.
+REAL_SHEET_HEADER = [
+    "Receiving Date", "", "", "Locations", "DTF Lot #", "DTF Part #", "Status",
+    "Allergen", "Material Name", "Supplier/MFG", "Lot / Batch", "EXP. Date", "",
+    "Start Day Stock", "Current Stock ", "Filter Moving / Date",
+    "Check / Cycle count", "Category (1 Raw) (2 Flavor)", "Price Per Kilo ",
+    "Total cost", "Ready To Archive",
+]
+
 
 def test_valid_values_produce_one_dict_per_data_row():
     values = [
@@ -53,6 +67,21 @@ def test_missing_expected_header_raises_immediately():
 
 def test_empty_sheet_yields_no_rows():
     assert list(SheetsInventorySource._rows_from_values([])) == []
+
+
+def test_real_sheet_header_whitespace_variants_are_normalized():
+    """Regression test for the real company sheet, which failed with
+    'missing expected column(s)' before _normalize_header existed — every
+    one of those six was present, just spaced differently than the code
+    assumed."""
+    values = [REAL_SHEET_HEADER, ["x"] * len(REAL_SHEET_HEADER)]
+
+    rows = list(SheetsInventorySource._rows_from_values(values))
+
+    row = rows[0]
+    for canonical in ("Lot/Batch", "Current Stock", "Filter Moving/Date",
+                      "Check/Cycle count", "Category (1 Raw)(2 Flavor)", "Price Per Kilo"):
+        assert row[canonical] == "x", f"{canonical!r} not populated under its canonical key"
 
 
 def test_short_row_yields_a_dict_missing_the_trailing_keys():

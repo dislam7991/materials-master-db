@@ -12,6 +12,7 @@ so there is no code path here that could modify the source sheet.
 
 from __future__ import annotations
 
+import re
 from typing import Iterator
 
 import gspread
@@ -21,6 +22,23 @@ from ..config import SheetsConfig
 from .base import EXPECTED_HEADERS, InventorySource, RawRow
 
 _SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+
+_WS_AROUND_SLASH = re.compile(r"\s*/\s*")
+_WS_BETWEEN_PARENS = re.compile(r"\)\s+\(")
+
+
+def _normalize_header(name: str) -> str:
+    """Collapse cosmetic whitespace a human typing a header cell adds
+    without meaning anything different: "Lot / Batch" and "Lot/Batch" are
+    the same column, so are "Category (1 Raw) (2 Flavor)" and "Category (1
+    Raw)(2 Flavor)", or a plain trailing space. Confirmed against the real
+    company sheet, whose header row has all three variants. Only touches
+    whitespace around punctuation — never alters the words themselves, so
+    it can't make two genuinely different columns collide."""
+    name = name.strip()
+    name = _WS_AROUND_SLASH.sub("/", name)
+    name = _WS_BETWEEN_PARENS.sub(")(", name)
+    return name
 
 
 class SheetAccessError(Exception):
@@ -71,6 +89,12 @@ class SheetsInventorySource(InventorySource):
         """Split out from `rows()` so the header check and row-shaping logic
         can be unit-tested without a real Sheets connection.
 
+        Header cells are whitespace-normalized (see _normalize_header)
+        before anything else, so the dict keys built here — and therefore
+        every `row.get("...")` downstream in etl.py — line up with
+        EXPECTED_HEADERS regardless of which cosmetic spacing variant the
+        real sheet happens to use.
+
         Checks that every EXPECTED_HEADERS name is present — order and extra
         columns are fine, since rows are matched by header name, not
         position — and raises immediately rather than silently loading a
@@ -81,7 +105,8 @@ class SheetsInventorySource(InventorySource):
         """
         if not values:
             return
-        header, *data_rows = values
+        raw_header, *data_rows = values
+        header = [_normalize_header(h) for h in raw_header]
         missing = [h for h in EXPECTED_HEADERS if h not in header]
         if missing:
             raise SheetHeaderError(
