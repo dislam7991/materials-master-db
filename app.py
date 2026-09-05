@@ -100,7 +100,7 @@ with tab_material:
                     "stock": "Stock in lots here",
                     "lot_count": "Lots",
                 }),
-                hide_index=True, use_container_width=True,
+                hide_index=True, width="stretch",
             )
             st.caption(f"Total stock on hand: **{q.total_stock(conn, material['material_id']):,.2f}**")
 
@@ -147,7 +147,7 @@ with tab_material:
                 "price_per_kilo": "Price/kg",
                 "status": "Status",
             }),
-            hide_index=True, use_container_width=True,
+            hide_index=True, width="stretch",
         )
 
         history = q.price_history(conn, material["material_id"])
@@ -186,7 +186,7 @@ with tab_location:
                     "dtf_lot_num": "DTF Lot #",
                     "exp_date": "Expires",
                 }),
-                hide_index=True, use_container_width=True,
+                hide_index=True, width="stretch",
             )
 
 with tab_all:
@@ -208,7 +208,7 @@ with tab_all:
             }
             for r in materials
         ]),
-        hide_index=True, use_container_width=True,
+        hide_index=True, width="stretch",
         column_config={
             # Numbers stay numbers so sorting works right; only the display
             # is formatted (see money(): "$xx.xx" strings sort wrong, e.g.
