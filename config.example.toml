@@ -1,0 +1,19 @@
+# Shape of the local config. Copy this file to `config.local.toml` and fill in
+# the real values there — `config.local.toml` is gitignored and must never be
+# committed, and neither must the service account key it points at.
+#
+# Without this file the project still runs end to end on synthetic data; it is
+# needed only for `--source sheets`, which reads the company's live sheet.
+
+[sheets]
+# The long id in the sheet's URL:
+# https://docs.google.com/spreadsheets/d/<sheet_id>/edit
+sheet_id = "REPLACE_WITH_SHEET_ID"
+
+# The exact name of the tab holding the raw material inventory.
+tab_name = "Raw Material Inventory"
+
+# Path to the Google service account JSON key, absolute or relative to this
+# file. Share the sheet with that account's email as a *viewer* — this project
+# never writes back to the sheet.
+service_account_key_path = "credentials/service_account.json"
