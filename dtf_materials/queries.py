@@ -221,6 +221,30 @@ def price_history(conn: sqlite3.Connection, material_id: int) -> list[sqlite3.Ro
     ).fetchall()
 
 
+def list_materials(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Every material as one flat table, for a spreadsheet-style overview.
+
+    Stock is summed the same way total_stock() does (in-stock, non-archived
+    lots only) but inlined here as one query instead of one call per row.
+    """
+    return conn.execute(
+        """
+        SELECT m.dtf_part_num, m.material_name, m.category,
+               s.canonical_name AS supplier, m.current_price_per_kilo,
+               m.allergen,
+               COALESCE((
+                   SELECT SUM(l.current_stock) FROM lots l
+                   WHERE l.material_id = m.material_id
+                     AND COALESCE(l.current_stock, 0) > 0
+                     AND l.ready_to_archive = 0
+               ), 0) AS total_stock
+        FROM materials m
+        LEFT JOIN suppliers s ON s.supplier_id = m.supplier_id
+        ORDER BY m.material_name
+        """
+    ).fetchall()
+
+
 def database_summary(conn: sqlite3.Connection) -> dict:
     def scalar(sql: str) -> int:
         return conn.execute(sql).fetchone()[0]

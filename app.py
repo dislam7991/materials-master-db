@@ -60,7 +60,9 @@ st.caption(
     f"{summary['suppliers']} supplier spellings · {summary['locations']} locations"
 )
 
-tab_material, tab_location = st.tabs(["Material lookup", "What's in a location"])
+tab_material, tab_location, tab_all = st.tabs(
+    ["Material lookup", "What's in a location", "All materials"]
+)
 
 with tab_material:
     def _material_options(term: str):
@@ -186,3 +188,32 @@ with tab_location:
                 }),
                 hide_index=True, use_container_width=True,
             )
+
+with tab_all:
+    st.write(
+        "Every material in the database. Click a column header to sort, or use "
+        "the search icon in the table's own toolbar to filter."
+    )
+    materials = q.list_materials(conn)
+    st.dataframe(
+        pd.DataFrame([
+            {
+                "Part #": r["dtf_part_num"] or "—",
+                "Material": r["material_name"],
+                "Category": (r["category"] or "—").title(),
+                "Supplier": r["supplier"] or "—",
+                "Price/kg": r["current_price_per_kilo"],
+                "Allergen": r["allergen"] or "—",
+                "Stock on hand": r["total_stock"],
+            }
+            for r in materials
+        ]),
+        hide_index=True, use_container_width=True,
+        column_config={
+            # Numbers stay numbers so sorting works right; only the display
+            # is formatted (see money(): "$xx.xx" strings sort wrong, e.g.
+            # "$100" before "$20").
+            "Price/kg": st.column_config.NumberColumn(format="$%.2f"),
+            "Stock on hand": st.column_config.NumberColumn(format="%.2f"),
+        },
+    )
