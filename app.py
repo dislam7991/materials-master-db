@@ -74,7 +74,7 @@ with tab_material:
     material_id = st_searchbox(
         _material_options,
         label="Search by DTF Part # or material name",
-        placeholder="e.g. RM-1409, caffeine, blueberry",
+        placeholder="e.g. 15-009, caffeine, blueberry",
         key="material_searchbox",
     )
 
