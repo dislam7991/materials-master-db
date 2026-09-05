@@ -19,7 +19,7 @@ the real source lives in a local, gitignored config and is never committed.
 - [x] ETL: extract → stage → validate → load
 - [x] Data-quality report
 - [x] Streamlit lookup app
-- [ ] Google Sheets source adapter (real data, local config only)
+- [x] Google Sheets source adapter (real data, local config only)
 - [ ] Sample-request ingestion (Excel) and material↔sample history
 
 ## Quickstart
