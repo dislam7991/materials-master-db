@@ -55,10 +55,12 @@ conn = get_conn()
 summary = q.database_summary(conn)
 
 st.title("Materials Master")
-st.caption(
-    f"{summary['materials']} materials · {summary['lots']} lots · "
-    f"{summary['suppliers']} supplier spellings · {summary['locations']} locations"
-)
+
+stat_materials, stat_lots, stat_suppliers, stat_locations = st.columns(4)
+stat_materials.metric("Materials", f"{summary['materials']:,}")
+stat_lots.metric("Lots", f"{summary['lots']:,}")
+stat_suppliers.metric("Supplier Spellings", f"{summary['suppliers']:,}")
+stat_locations.metric("Locations", f"{summary['locations']:,}")
 
 tab_material, tab_location, tab_all = st.tabs(
     ["Material lookup", "What's in a location", "All materials"]
