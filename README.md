@@ -46,6 +46,23 @@ python -m dtf_materials.etl --source sheets
 The service account backing this must only ever be shared on the sheet as
 **Viewer** — this project has no code path that writes back to it.
 
+### Windows: one-click launch
+
+[`run_app.bat`](run_app.bat) is a double-click launcher for the app, meant
+for handing this to someone who won't run commands themselves. On first run
+it creates the virtual environment, installs dependencies, and (if there's
+no database yet) builds a starter one from the synthetic sample data; every
+run after that just activates the environment and launches the app.
+
+Requires Python 3.11+ installed first (from python.org — check "Add
+python.exe to PATH" during setup). After that, double-clicking `run_app.bat`
+is the whole workflow. Right-click it → **Send to → Desktop (create
+shortcut)** for a permanent icon.
+
+This launches against whatever database is already there — synthetic by
+default, or real data if `config.local.toml` is set up (see above) and
+someone has already run `--source sheets` once.
+
 ## The lookup app
 
 See [app.py](app.py) (UI only) and [dtf_materials/queries.py](dtf_materials/queries.py)
