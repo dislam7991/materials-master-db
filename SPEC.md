@@ -25,7 +25,8 @@ This project is the minimum system that fixes that:
 4. **A Streamlit lookup app**: type a part # or name → location, price,
    supplier, lot history.
 5. **Sample-request ingestion**: parse the Excel sample sheets, link
-   materials ↔ samples, so material usage history finally exists in one place.
+   materials ↔ samples, so material usage history finally exists in one
+   place. *Parked — see the Parked section; nobody is asking for this yet.*
 
 It doubles as a public portfolio project, so the repo contains **synthetic
 data only**. The real-sheet connection lives in a gitignored local config and
@@ -149,34 +150,20 @@ done (DoD). Do them in order; later tasks assume earlier ones.
       DoD: `python -m dtf_materials.etl --source sheets` loads the real tab
       on a configured machine; CSV path still the default and CI still
       synthetic-only.
-- [ ] **B3. First real run + real quality report.** Run against the actual
-      sheet at work. Save the (scrubbed) findings summary — counts only, no
-      material names or prices — to `docs/real_run_notes.md`.
-      *Why: the before/after story ("report found N conflicting part #s in
-      the live sheet") is the whole pitch, at work and in interviews.*
-      DoD: notes file committed; no real data in the repo.
+- [x] **B3. First real run against the live sheet.** Confirmed working on a
+      configured machine: `--source sheets` pulls a copy of the work
+      inventory sheet, the load succeeds, and the app runs on the real
+      materials.
+      *Scope cut on the way through: this task originally also demanded a
+      scrubbed findings summary in `docs/real_run_notes.md`. That file was
+      only ever for a portfolio before/after story, and a working tool
+      loaded with real data is stronger evidence than a count of dirty
+      rows. Dropped rather than deferred.*
+      DoD: real run confirmed on a configured machine; no real data in the
+      repo.
 
-### Phase C — Sample requests (closes the original gap)
-
-- [ ] **C1. Get 2–3 real sample-request Excel files, map their layout.**
-      Document the cell positions/ranges that matter in
-      `docs/sample_sheet_layout.md`. No code.
-      DoD: layout doc committed.
-- [ ] **C2. Synthetic sample-request generator.** Same philosophy as the
-      inventory generator: fake `.xlsx` files matching the real layout,
-      including the dirt (part #s that don't exist in inventory, blank
-      cells).
-      DoD: generator writes N fake files; seeded.
-- [ ] **C3. Sample ingestion.** Parse the files (openpyxl), fill `samples` +
-      `sample_materials`, matching materials by Part #. Unmatched part #s
-      become quality findings, never guessed rows.
-      DoD: ETL run loads synthetic samples; quality report gains an
-      "unmatched sample materials" section; tests cover the match/no-match
-      paths.
-- [ ] **C4. Sample history in the app.** On a material's page: which samples
-      used it. New "Samples" tab: look up a sample, see its materials.
-      Queries in `queries.py`, UI in `app.py`, same separation as now.
-      DoD: both directions visible in the app against synthetic data.
+Phase C (sample requests) is **parked** — see the Parked section near the
+bottom of this file. Read section 5 top to bottom skipping it.
 
 ### Phase E — Flavor sample database (second live sheet)
 
@@ -258,6 +245,34 @@ Listed so the daily automation never "helpfully" adds them:
 5. Never commit: `db/*.db`, `data/real/`, `config.local.toml`, service
    account keys, or any real material name, price, supplier, or client.
 
+## Parked — Phase C (sample requests)
+
+Sample-request ingestion is goal 5 in section 1, but nobody is asking for it
+and it isn't part of the materials database as it stands. Parked rather than
+deleted: if material usage history is ever actually wanted, these are still
+the right tasks in the right order. The daily automation skips this section
+— treat it as out of scope until someone moves it back into section 5.
+
+- [ ] **C1. Get 2–3 real sample-request Excel files, map their layout.**
+      Document the cell positions/ranges that matter in
+      `docs/sample_sheet_layout.md`. No code.
+      DoD: layout doc committed.
+- [ ] **C2. Synthetic sample-request generator.** Same philosophy as the
+      inventory generator: fake `.xlsx` files matching the real layout,
+      including the dirt (part #s that don't exist in inventory, blank
+      cells).
+      DoD: generator writes N fake files; seeded.
+- [ ] **C3. Sample ingestion.** Parse the files (openpyxl), fill `samples` +
+      `sample_materials`, matching materials by Part #. Unmatched part #s
+      become quality findings, never guessed rows.
+      DoD: ETL run loads synthetic samples; quality report gains an
+      "unmatched sample materials" section; tests cover the match/no-match
+      paths.
+- [ ] **C4. Sample history in the app.** On a material's page: which samples
+      used it. New "Samples" tab: look up a sample, see its materials.
+      Queries in `queries.py`, UI in `app.py`, same separation as now.
+      DoD: both directions visible in the app against synthetic data.
+
 ## Backlog
 
 Things that came up mid-task and are deliberately not built yet (rule 4).
@@ -270,8 +285,10 @@ Things that came up mid-task and are deliberately not built yet (rule 4).
   few lines each; `(15.00)` should probably stay unparsed, since neither
   `15.00` nor `-15.00` is a defensible price to invent. Left alone because
   widening what the parser accepts is a behavior change, not A1's DoD.
-  Decide it with evidence from **B3** — the first real run tells us how
-  often these actually occur — not from guesswork now.
+  This was waiting on counts from B3, which B3 no longer collects. New
+  trigger: decide it when someone using the app reports a material that
+  shows a blank date or price it should have. That is the same evidence,
+  arriving for free, from the person who actually cares.
 
 - **The committed sample report can go stale.** `docs/quality_report_sample.md`
   is a snapshot: change the report's wording or the generator's seed and the
@@ -291,14 +308,17 @@ Things that came up mid-task and are deliberately not built yet (rule 4).
   regenerated from the current `scripts/generate_synthetic_sheet.py`, so a
   local generator run no longer produces a spurious diff.
 
-- **B3 is blocked on the automation — it needs a human at a configured
-  machine.** B3's DoD is a real run against the live inventory sheet, and the
-  automation's checkout has neither `config.local.toml` nor the service
-  account key (both correctly gitignored) and no network path to the sheet.
-  What's needed from the user: run `python -m dtf_materials.etl --source
-  sheets` and `python -m dtf_materials.quality_report --out
-  docs/real_run_notes.md` on the machine where B1's config is set up, then
-  hand back the finding *counts only* (no material names, prices, suppliers
-  or clients) so `docs/real_run_notes.md` can be written and committed.
-  Nothing after B3 is started in the meantime, per rule 1 — the next boxes
-  (C1, E1) are blocked on the same kind of real-world input.
+- ~~**B3 is blocked on the automation.**~~ Resolved: the run had already
+  happened on the configured machine, so B3 was checked off and its
+  `docs/real_run_notes.md` requirement dropped. The general lesson stands —
+  the automation's checkout has no `config.local.toml` and no service
+  account key, so any task defined by a live-sheet run has to be confirmed
+  by a human and recorded here.
+
+- **The second sheet needs a second config section, not a second key.** A
+  service account is an identity, and sharing is per file: share the flavor
+  sheet with the same service account email as Viewer and one key reads both
+  sheets, even though that sheet lives on a personal Google account rather
+  than the company one. `config.local.toml` currently describes exactly one
+  sheet, so it grows a second section (or a list) when E3 lands. Noted here
+  rather than built now, because E1/E2 may change what that section holds.
