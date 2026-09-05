@@ -290,3 +290,15 @@ Things that came up mid-task and are deliberately not built yet (rule 4).
 - ~~**The committed synthetic CSV is stale.**~~ Resolved in A3: the file was
   regenerated from the current `scripts/generate_synthetic_sheet.py`, so a
   local generator run no longer produces a spurious diff.
+
+- **B3 is blocked on the automation — it needs a human at a configured
+  machine.** B3's DoD is a real run against the live inventory sheet, and the
+  automation's checkout has neither `config.local.toml` nor the service
+  account key (both correctly gitignored) and no network path to the sheet.
+  What's needed from the user: run `python -m dtf_materials.etl --source
+  sheets` and `python -m dtf_materials.quality_report --out
+  docs/real_run_notes.md` on the machine where B1's config is set up, then
+  hand back the finding *counts only* (no material names, prices, suppliers
+  or clients) so `docs/real_run_notes.md` can be written and committed.
+  Nothing after B3 is started in the meantime, per rule 1 — the next boxes
+  (C1, E1) are blocked on the same kind of real-world input.
