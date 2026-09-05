@@ -261,13 +261,37 @@ def run(source: InventorySource, db_path: Path | str = DEFAULT_DB_PATH) -> LoadS
 def main() -> None:
     parser = argparse.ArgumentParser(description="Load the inventory sheet into the materials master DB.")
     parser.add_argument("csv_path", nargs="?", default="data/synthetic/raw_material_inventory.csv")
+    parser.add_argument("--source", choices=["csv", "sheets"], default="csv",
+                         help="Where to read inventory rows from (default: csv).")
     parser.add_argument("--db", default=str(DEFAULT_DB_PATH))
     args = parser.parse_args()
 
-    source = CsvInventorySource(args.csv_path)
+    if args.source == "sheets":
+        # Deferred imports: gspread/google-auth are only needed for this
+        # branch (see requirements-sheets.txt), so the default CSV path
+        # never has to import them.
+        try:
+            from .sources.sheets_source import SheetsInventorySource
+        except ModuleNotFoundError as exc:
+            raise SystemExit(
+                f"{exc}. --source sheets needs the packages in "
+                f"requirements-sheets.txt: pip install -r requirements-sheets.txt"
+            )
+        from .config import ConfigError, load_sheets_config
+
+        try:
+            config = load_sheets_config()
+        except ConfigError as exc:
+            raise SystemExit(f"Config error: {exc}")
+        source = SheetsInventorySource(config)
+        source_label = f"Google Sheet {config.sheet_id} (tab {config.tab_name!r})"
+    else:
+        source = CsvInventorySource(args.csv_path)
+        source_label = args.csv_path
+
     stats = run(source, args.db)
 
-    print(f"Staged {stats.staged_rows} rows from {args.csv_path}")
+    print(f"Staged {stats.staged_rows} rows from {source_label}")
     if stats.header_mismatches:
         print(f"  WARNING: source is missing expected columns: {stats.header_mismatches}")
     print(f"Materials created: {stats.materials_created}, updated: {stats.materials_updated}"
