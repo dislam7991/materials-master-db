@@ -1,0 +1,6 @@
+# Only needed on a machine actually running `--source sheets` against the
+# real Google Sheet (see config.example.toml and SPEC.md task B2). The
+# default CSV pipeline, the app, and CI never import these — the core ETL
+# stays stdlib-only (see SPEC.md section 3).
+gspread>=6.0
+google-auth>=2.0

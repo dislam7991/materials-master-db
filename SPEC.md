@@ -141,7 +141,7 @@ done (DoD). Do them in order; later tasks assume earlier ones.
       in the repo, ever.
       DoD: loader returns typed config; missing file → clear error naming
       the example file.
-- [ ] **B2. `SheetsInventorySource`.** Implements `InventorySource.rows()`
+- [x] **B2. `SheetsInventorySource`.** Implements `InventorySource.rows()`
       via the Sheets API (service account). Asserts the header row matches
       `EXPECTED_HEADERS`. Nothing downstream changes.
       *Why service account over OAuth: no browser flow, one JSON key shared

@@ -19,7 +19,7 @@ the real source lives in a local, gitignored config and is never committed.
 - [x] ETL: extract → stage → validate → load
 - [x] Data-quality report
 - [x] Streamlit lookup app
-- [ ] Google Sheets source adapter (real data, local config only)
+- [x] Google Sheets source adapter (real data, local config only)
 - [ ] Sample-request ingestion (Excel) and material↔sample history
 
 ## Quickstart
@@ -34,6 +34,17 @@ streamlit run app.py                           # launch the lookup app
 
 The pipeline is stdlib-only; `pip install -r requirements.txt` is needed only
 for the app.
+
+To load from the real Google Sheet instead of the synthetic CSV, set up
+`config.local.toml` (copy `config.example.toml` — see that file for the
+shape), `pip install -r requirements-sheets.txt`, then:
+
+```
+python -m dtf_materials.etl --source sheets
+```
+
+The service account backing this must only ever be shared on the sheet as
+**Viewer** — this project has no code path that writes back to it.
 
 ## The lookup app
 
