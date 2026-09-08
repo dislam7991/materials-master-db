@@ -41,6 +41,16 @@ def open_worksheet(sheet_id: str, tab_name: str, service_account_key_path: Path)
             f"Spreadsheet has no tab named {tab_name!r}. Check the exact "
             f"tab name at the bottom of the sheet."
         ) from exc
+    except PermissionError as exc:
+        # gspread's own open_by_key() translates a 403 into this builtin
+        # rather than raising its own APIError — caught separately so this
+        # very common setup mistake gets the friendly message below instead
+        # of a bare "PermissionError" traceback.
+        raise SheetAccessError(
+            f"Permission denied opening sheet_id {sheet_id!r}. Share the "
+            f"sheet — as at least Viewer — with the service account's "
+            f"email (the 'client_email' field in {service_account_key_path})."
+        ) from exc
     except gspread.exceptions.APIError as exc:
         raise SheetAccessError(
             f"Google API error opening the sheet: {exc}. If this is a "
