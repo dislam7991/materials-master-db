@@ -79,7 +79,7 @@ if not Path(DEFAULT_DB_PATH).exists():
 conn = get_conn()
 summary = q.database_summary(conn)
 
-st.title("Materials Master")
+st.title("Materials Master Database")
 
 stat_materials, stat_lots, stat_suppliers, stat_locations = st.columns(4)
 stat_materials.metric("Materials", f"{summary['materials']:,}")
