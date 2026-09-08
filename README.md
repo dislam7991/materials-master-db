@@ -108,59 +108,67 @@ found. Same Viewer-only rule applies.
 
 ### Windows: one-click launch
 
-[`run_app.bat`](run_app.bat) is a double-click launcher for the app, meant
-for handing this to someone who won't run commands themselves. On first run
-it creates the virtual environment, installs dependencies, and (if there's
-no database yet) builds a starter one from the synthetic sample data; every
-run after that just activates the environment and launches the app.
+[`run_app.bat`](run_app.bat) is a double-click launcher, meant for handing this
+to someone who won't run commands. It behaves differently depending on whether
+`config.local.toml` is present, because there are two very different people
+running it:
 
-Requires Python 3.11+ installed first (from python.org — check "Add
-python.exe to PATH" during setup). After that, double-clicking `run_app.bat`
-is the whole workflow. Right-click it → **Send to → Desktop (create
-shortcut)** for a permanent icon.
+| | **Operator** (has the config + service account key) | **Viewer** (a colleague) |
+|---|---|---|
+| Installs | app deps + `requirements-sheets.txt` | app deps only |
+| Database | refreshed from both sheets on every launch | left exactly as received |
+| Needs Google access | yes | **no** |
 
-This launches against whatever database is already there — synthetic by
-default, or real data if `config.local.toml` is set up (see above) and
-someone has already run `--source sheets` once.
+On first run it creates the virtual environment and installs dependencies;
+after that it activates and launches. Every setup step is checked, and a failed
+install deletes its own half-built environment so the next double-click retries
+rather than skipping past it.
 
-## Repository layout
+Requires Python 3.11+ (from python.org — check "Add python.exe to PATH" during
+setup). The launcher verifies the version rather than just that some `python`
+answers, which also catches the Microsoft Store's placeholder `python.exe`.
+Right-click the file → **Send to → Desktop (create shortcut)** for a permanent
+icon.
 
-```
-dtf_materials/
-  db.py             schema init (idempotent; safe to re-run)
-  cleaning.py       pure parsers: raw string in, clean value or None out, never raises
-  etl.py            the load: staging -> materials/lots/lot_locations
-  quality_report.py reads staging, names every dirty source row (--out for Markdown)
-  lab_samples.py    the second sheet: loads the R&D lab's flavor sample catalog
-  config.py         reads the gitignored config.local.toml ([sheets], [lab_sheet])
-  queries.py        every read the app makes; no Streamlit import
-  sources/          base.py (the interface), csv_source.py, sheets_source.py
-app.py              Streamlit UI only
-db/schema.sql       the schema, with its reasoning in comments
-scripts/            synthetic sheet generator
-docs/               flavor sheet layout + decisions, sample quality report
-tests/              pytest suites (see below)
-```
-
-## Tests and CI
+**As the operator**, each launch re-runs the inventory ETL and the lab-sample
+loader before starting the app, so you are always looking at current data. This
+is a re-run, not a rebuild — the database file is never deleted, because the
+ETL is already idempotent and atomic and deleting it would discard the stable
+`material_id`s it works to preserve. If a refresh fails (no network, sheet not
+shared), the app still launches on the data already in the database rather than
+refusing to start. To skip the refresh entirely:
 
 ```
-python -m pytest
+run_app.bat --no-refresh
 ```
 
-Suites cover the cleaning parsers, the three ETL load invariants (stable
-material ids under a re-sorted source, a crash mid-load leaving prior data
-intact, two consecutive runs producing identical tables), the config loader,
-the quality report, the Sheets header handling, and the lab-sample loader. The
-Sheets suite skips itself when `gspread` isn't installed, so a machine that
-only runs the synthetic pipeline still gets a clean run.
+### Handing the app to a colleague
 
-[CI](.github/workflows/ci.yml) runs on every push and pull request: it installs
-*only* pytest, then runs the generator, the ETL, the quality report, and the
-test suite. Installing nothing else is deliberate — a new third-party import
-sneaking into `dtf_materials/` fails the job instead of passing quietly. CI is
-synthetic-only; it has no config and no service account key, so anything
-defined by a live-sheet run has to be confirmed by a human.
+**Do not copy the service account key.** It is a credential, not a setting:
+whoever holds that file can read both sheets as that identity, from any
+machine, until the key is revoked. Sheet IDs alone grant nothing, so
+"just paste in the IDs" doesn't work either — the key is the part that matters,
+and it is the part not to distribute.
+
+They don't need Google access at all. The app only ever reads
+`db/materials.db`; `gspread` exists solely for the two loaders that *fill* it,
+which is why `requirements-sheets.txt` is a separate file. So:
+
+1. Run the app here once, so the database holds current data.
+2. Send them the repo folder **plus `db/materials.db`** (~1.4 MB). It is
+   gitignored, so it will not arrive via `git clone` — use a shared drive or
+   send the file.
+3. They double-click `run_app.bat`. Seeing no config, it installs app
+   dependencies only, leaves the database untouched, and launches.
+
+Two caveats. The database is a **snapshot**: it goes stale until you send a new
+one. And it contains real material names, prices, and suppliers — fine for a
+colleague who already has sheet access, but it is a data handoff, not just a
+program.
+
+A shared database on a synced drive would replace step 2 with one central
+refresh. See the Backlog in [SPEC.md](SPEC.md) for why that is worth doing only
+once the ETL is pointed at the company's live sheet.
 
 ## The lookup app
 

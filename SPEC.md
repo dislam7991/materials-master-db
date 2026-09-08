@@ -356,27 +356,55 @@ Things that came up mid-task and are deliberately not built yet (rule 4).
   sheet, so it grows a second section (or a list) when E3 lands. Noted here
   rather than built now, because E1/E2 may change what that section holds.
 
-- **`run_app.bat` has five setup gaps — see issue #15.** The launcher is the
-  one artifact aimed at someone who won't run commands, and it is the least
-  defended thing in the repo. The full write-up is in the issue; the short
-  version, worst first: a first run whose `pip install` fails leaves `venv\`
-  existing but unusable, and the `if not exist venv` guard then skips the
-  install forever; the venv it builds omits `requirements-sheets.txt`, so
-  neither `--source sheets` nor `dtf_materials.lab_samples` can run from it;
-  the Lab Samples tab is empty with no explanation because nothing loads it;
-  the database is built once and never refreshed; and `where python` proves
-  a python exists but not that it is 3.11+ or even a real interpreter.
+- ~~**`run_app.bat` has five setup gaps — see issue #15.**~~ Resolved: all five
+  fixed. The venv is now gated on `venv\Scripts\streamlit.exe` rather than on
+  the folder existing, and a failed install deletes itself so the next run
+  retries; the sheets extras install when `config.local.toml` is present; the
+  Lab Samples tab explains an empty catalog instead of silently finding
+  nothing; the database is refreshed by re-running the loaders, never by
+  deleting it; and Python 3.11+ is verified rather than assumed.
 
-  Filed rather than fixed because two of them are design choices, not missing
-  lines. Whether to install the sheets extras always or only when
-  `config.local.toml` is present is a real question. So is the empty lab tab:
-  the honest fix might be in `app.py` (say "no lab samples loaded" rather than
-  silently finding nothing), or it might be a synthetic lab-sample generator
-  paralleling `scripts/generate_synthetic_sheet.py` — which would also give
-  that tab test coverage and match the synthetic-first principle in section 2.
-  That last one is the only real work here; the rest is a batch-file
-  afternoon.
+  The two design questions were answered by separating the two people who run
+  the launcher. An **operator** has the config and key, gets the sheets extras,
+  and refreshes on every launch. A **viewer** has neither, gets app
+  dependencies only, and has their database left strictly alone — because a
+  viewer's `db/materials.db` is a real-data snapshot handed to them, and
+  regenerating synthetic data over it would destroy their only copy. That also
+  answered "how does a colleague see real data" without distributing a service
+  account key: they don't need Google access, they need a database file.
 
-  Decide it when the launcher is actually handed to someone. Everything above
-  is a prediction about a coworker who does not exist yet, and the first real
-  handoff will say which of the five actually matter.
+  The synthetic lab-sample generator was dropped. It was justified in the issue
+  partly as filling a test-coverage gap, which was wrong —
+  `tests/test_lab_samples.py` already covers header validation, duplicate-code
+  flagging and reload-clearing with fabricated rows. The only remaining argument
+  is that a stranger cloning this public repo sees an empty tab, which the new
+  message now explains.
+
+- **Shared database on a synced drive, once there is a live sheet behind it.**
+  The colleague handoff is a snapshot today: the operator refreshes, then sends
+  `db/materials.db` (~1.4 MB) by hand, and it is stale from the moment it
+  arrives. Putting the database in a shared OneDrive folder would replace that
+  with one central refresh everyone picks up.
+
+  Two things sit in front of it, and the second is the real one:
+
+  (a) `DEFAULT_DB_PATH` is hardcoded (`dtf_materials/db.py:10`). The app and
+  both loaders would need to take a configured path — small, and it belongs in
+  `config.local.toml` next to the sheet settings.
+
+  (b) The ETL currently reads a personal *copy* of the inventory sheet, not the
+  company's live one, and that copy does not update. A shared database built on
+  it would distribute stale data faster rather than fresher data — motion
+  without movement. This is worth building the day the real sheet is shared,
+  and not before.
+
+  When it is built: write the database locally and copy the finished file to the
+  synced folder, never point a loader's write path at a folder a sync client is
+  actively touching, and keep exactly one writer. SQLite is single-writer by
+  design and a sync client racing a live transaction is how the file gets
+  corrupted or silently forked into a "conflicted copy".
+
+  Note this collides with section 6's "no scheduled ETL daemon". Daily
+  auto-refresh for a shared database is a genuine reason to revisit that
+  decision — but revisit it explicitly, as its own entry here, rather than
+  drifting into a scheduler because it seemed convenient.
