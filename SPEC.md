@@ -179,7 +179,7 @@ Real, unresolved prep work sits in front of any code here — the sheet's
 data needs to be understood and cleaned up before it can be loaded, the
 same way the main sheet was.
 
-- [ ] **E1. Get read access and map the sheet's real structure.** Document
+- [x] **E1. Get read access and map the sheet's real structure.** Document
       its actual columns, naming quirks, and known dirtiness in
       `docs/flavor_sample_sheet_layout.md`, the same way the main sheet's
       shape was established before B2 was built. No code yet.
