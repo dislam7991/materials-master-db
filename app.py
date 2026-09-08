@@ -43,6 +43,31 @@ def rows_to_df(rows, columns: dict[str, str]) -> pd.DataFrame:
     return pd.DataFrame(data, columns=list(columns.values()))
 
 
+# Shown when the lab catalog hasn't been loaded. Flush-left because
+# Streamlit renders this as markdown, and an indented line would become a
+# code block. Kept as a constant rather than inline for the same reason.
+NO_LAB_SAMPLES_MESSAGE = """
+**No lab samples have been loaded into this database.**
+
+The catalog lives in its own Google Sheet and is loaded by its own command,
+separately from the warehouse inventory — so this tab can be empty while
+everything above is full.
+
+If a colleague gave you this database, ask them for an updated copy: the lab
+samples travel inside the database file.
+
+To load it yourself, add a `[lab_sheet]` section to `config.local.toml` (see
+`config.example.toml`), then run:
+
+```
+python -m dtf_materials.lab_samples
+```
+
+There is no synthetic stand-in for this sheet, so a database built only from
+the sample data will always show this message.
+"""
+
+
 if not Path(DEFAULT_DB_PATH).exists():
     st.error(
         f"No database at `{DEFAULT_DB_PATH}`.\n\n"
@@ -226,59 +251,67 @@ with tab_lab:
         "warehouse inventory above, so results here are independent of it."
     )
 
-    def _lab_sample_options(term: str):
-        return [
-            (
-                f"{r['sample_code'] or '(no code)'} — {r['flavor_name'] or '(unnamed)'} "
-                f"({r['vendor'] or 'unknown vendor'})",
-                r["lab_sample_id"],
-            )
-            for r in q.search_lab_samples(conn, term, limit=10)
-        ]
-
-    lab_sample_id = st_searchbox(
-        _lab_sample_options,
-        label="Search by vendor, flavor name, sample code, or Part #",
-        placeholder="e.g. 7182011, mango, sensapure",
-        key="lab_sample_searchbox",
-    )
-
-    if not lab_sample_id:
-        st.info("Type a vendor, flavor name, sample code, or part number to begin.")
+    if summary["lab_samples"] == 0:
+        # An empty catalog is a normal state, not a failure: it comes from a
+        # different sheet loaded by a different command, and a
+        # synthetic-only database never has any. Say so, rather than letting
+        # every search quietly return nothing and read as broken.
+        st.info(NO_LAB_SAMPLES_MESSAGE)
     else:
-        sample = q.get_lab_sample(conn, lab_sample_id)
 
-        st.subheader(f"{sample['sample_code'] or '(no code)'} — {sample['flavor_name'] or '(unnamed)'}")
+        def _lab_sample_options(term: str):
+            return [
+                (
+                    f"{r['sample_code'] or '(no code)'} — {r['flavor_name'] or '(unnamed)'} "
+                    f"({r['vendor'] or 'unknown vendor'})",
+                    r["lab_sample_id"],
+                )
+                for r in q.search_lab_samples(conn, term, limit=10)
+            ]
 
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Vendor", sample["vendor"] or "—")
-        c2.metric("Declaration Type", sample["declaration_type"] or "—")
-        c3.metric("Lab Location", sample["location_lab"] or "—")
-        c4.metric("Price / kilo", money(sample["price_per_kilo"]))
-
-        st.markdown("#### Sample details")
-        st.caption(
-            "Most of these fields are sparse right now and fill in over time — "
-            "blank means not recorded yet, not missing data."
+        lab_sample_id = st_searchbox(
+            _lab_sample_options,
+            label="Search by vendor, flavor name, sample code, or Part #",
+            placeholder="e.g. 7182011, mango, sensapure",
+            key="lab_sample_searchbox",
         )
-        detail_fields = {
-            "Flavor Family": sample["flavor_family"],
-            "Category/Subcategory": sample["category_subcategory"],
-            "Usage Level": sample["usage_level"],
-            "Dry Aroma Descriptors": sample["dry_aroma_descriptors"],
-            "Aroma Intensity": sample["aroma_intensity"],
-            "Top Note": sample["top_note"],
-            "Mid Palate Character": sample["mid_palate_character"],
-            "Finish Note": sample["finish_note"],
-            "Off Note Tendency": sample["off_note_tendency"],
-            "Matrix Performance": sample["matrix_performance"],
-            "Best Pairings": sample["best_pairings"],
-            "Tested In": sample["tested_in"],
-            "Allergens": sample["allergens"],
-            "Date Received": sample["date_received"],
-            "DTF Part #": sample["dtf_part_num"],
-        }
-        st.dataframe(
-            pd.DataFrame([{"Field": k, "Value": v or "—"} for k, v in detail_fields.items()]),
-            hide_index=True, width="stretch",
-        )
+
+        if not lab_sample_id:
+            st.info("Type a vendor, flavor name, sample code, or part number to begin.")
+        else:
+            sample = q.get_lab_sample(conn, lab_sample_id)
+
+            st.subheader(f"{sample['sample_code'] or '(no code)'} — {sample['flavor_name'] or '(unnamed)'}")
+
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Vendor", sample["vendor"] or "—")
+            c2.metric("Declaration Type", sample["declaration_type"] or "—")
+            c3.metric("Lab Location", sample["location_lab"] or "—")
+            c4.metric("Price / kilo", money(sample["price_per_kilo"]))
+
+            st.markdown("#### Sample details")
+            st.caption(
+                "Most of these fields are sparse right now and fill in over time — "
+                "blank means not recorded yet, not missing data."
+            )
+            detail_fields = {
+                "Flavor Family": sample["flavor_family"],
+                "Category/Subcategory": sample["category_subcategory"],
+                "Usage Level": sample["usage_level"],
+                "Dry Aroma Descriptors": sample["dry_aroma_descriptors"],
+                "Aroma Intensity": sample["aroma_intensity"],
+                "Top Note": sample["top_note"],
+                "Mid Palate Character": sample["mid_palate_character"],
+                "Finish Note": sample["finish_note"],
+                "Off Note Tendency": sample["off_note_tendency"],
+                "Matrix Performance": sample["matrix_performance"],
+                "Best Pairings": sample["best_pairings"],
+                "Tested In": sample["tested_in"],
+                "Allergens": sample["allergens"],
+                "Date Received": sample["date_received"],
+                "DTF Part #": sample["dtf_part_num"],
+            }
+            st.dataframe(
+                pd.DataFrame([{"Field": k, "Value": v or "—"} for k, v in detail_fields.items()]),
+                hide_index=True, width="stretch",
+            )

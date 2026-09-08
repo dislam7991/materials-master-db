@@ -298,4 +298,9 @@ def database_summary(conn: sqlite3.Connection) -> dict:
         "suppliers": scalar("SELECT COUNT(*) FROM suppliers"),
         "locations": scalar("SELECT COUNT(DISTINCT location) FROM lot_locations"),
         "staged_rows": scalar("SELECT COUNT(*) FROM staging_inventory_raw"),
+        # Loaded by a separate command from a separate sheet, so it is
+        # routinely 0 while the inventory tables are full. The app uses this
+        # to explain an empty Lab Samples tab instead of silently returning
+        # nothing for every search.
+        "lab_samples": scalar("SELECT COUNT(*) FROM lab_samples"),
     }
