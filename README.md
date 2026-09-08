@@ -46,6 +46,17 @@ python -m dtf_materials.etl --source sheets
 The service account backing this must only ever be shared on the sheet as
 **Viewer** — this project has no code path that writes back to it.
 
+The R&D lab's flavor sample catalog is a second, separate Google Sheet (see
+`docs/flavor_sample_sheet_layout.md`) — add a `[lab_sheet]` section to the
+same `config.local.toml`, then:
+
+```
+python -m dtf_materials.lab_samples
+```
+
+Loads into its own `lab_samples` table and flags any duplicate sample codes
+found. Same Viewer-only rule applies.
+
 ### Windows: one-click launch
 
 [`run_app.bat`](run_app.bat) is a double-click launcher for the app, meant
@@ -69,8 +80,11 @@ See [app.py](app.py) (UI only) and [dtf_materials/queries.py](dtf_materials/quer
 (all data access). They are separate so the queries can be tested from a REPL
 or reused by a future CLI/API without importing Streamlit.
 
-Two tabs: look up a material by Part # or name, and look up what is stored at
-a location (a full code like `6L-27-D`, or an aisle prefix like `6L`).
+Four tabs: look up a material by Part # or name, look up what is stored at a
+location (a full code like `6L-27-D`, or an aisle prefix like `6L`), browse
+every material in a sortable table, and search the R&D lab's flavor sample
+catalog by vendor, flavor name, sample code, or Part # — a separate table
+fed by a separate sheet (see `docs/flavor_sample_sheet_layout.md`).
 
 **Search is parameterized and wildcard-escaped.** User input never reaches SQL
 as a string fragment, and `%`/`_` in a search term match literally — otherwise

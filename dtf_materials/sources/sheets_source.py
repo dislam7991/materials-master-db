@@ -12,38 +12,13 @@ so there is no code path here that could modify the source sheet.
 
 from __future__ import annotations
 
-import re
 from typing import Iterator
 
-import gspread
-from google.oauth2.service_account import Credentials
-
 from ..config import SheetsConfig
-from .base import EXPECTED_HEADERS, InventorySource, RawRow
+from .base import EXPECTED_HEADERS, InventorySource, RawRow, rows_from_values
+from .gsheets_common import SheetAccessError, open_worksheet
 
-_SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-
-_WS_AROUND_SLASH = re.compile(r"\s*/\s*")
-_WS_BETWEEN_PARENS = re.compile(r"\)\s+\(")
-
-
-def _normalize_header(name: str) -> str:
-    """Collapse cosmetic whitespace a human typing a header cell adds
-    without meaning anything different: "Lot / Batch" and "Lot/Batch" are
-    the same column, so are "Category (1 Raw) (2 Flavor)" and "Category (1
-    Raw)(2 Flavor)", or a plain trailing space. Confirmed against the real
-    company sheet, whose header row has all three variants. Only touches
-    whitespace around punctuation — never alters the words themselves, so
-    it can't make two genuinely different columns collide."""
-    name = name.strip()
-    name = _WS_AROUND_SLASH.sub("/", name)
-    name = _WS_BETWEEN_PARENS.sub(")(", name)
-    return name
-
-
-class SheetAccessError(Exception):
-    """Could not open the configured sheet or tab — bad sheet_id, wrong tab
-    name, or the sheet isn't shared with the service account."""
+__all__ = ["SheetAccessError", "SheetHeaderError", "SheetsInventorySource"]
 
 
 class SheetHeaderError(Exception):
@@ -58,61 +33,14 @@ class SheetsInventorySource(InventorySource):
         yield from self._rows_from_values(self._fetch_values())
 
     def _fetch_values(self) -> list[list[str]]:
-        creds = Credentials.from_service_account_file(
-            str(self.config.service_account_key_path), scopes=_SCOPES
+        worksheet = open_worksheet(
+            self.config.sheet_id, self.config.tab_name, self.config.service_account_key_path
         )
-        client = gspread.authorize(creds)
-        try:
-            spreadsheet = client.open_by_key(self.config.sheet_id)
-            worksheet = spreadsheet.worksheet(self.config.tab_name)
-        except gspread.exceptions.SpreadsheetNotFound as exc:
-            raise SheetAccessError(
-                f"No spreadsheet found for sheet_id {self.config.sheet_id!r}. "
-                f"Check it against the sheet's URL."
-            ) from exc
-        except gspread.exceptions.WorksheetNotFound as exc:
-            raise SheetAccessError(
-                f"Spreadsheet has no tab named {self.config.tab_name!r}. "
-                f"Check the exact tab name at the bottom of the sheet."
-            ) from exc
-        except gspread.exceptions.APIError as exc:
-            raise SheetAccessError(
-                f"Google API error opening the sheet: {exc}. If this is a "
-                f"permission error, make sure the sheet is shared — as at "
-                f"least Viewer — with the service account's email (the "
-                f"'client_email' field in {self.config.service_account_key_path})."
-            ) from exc
         return worksheet.get_all_values()
 
     @staticmethod
     def _rows_from_values(values: list[list[str]]) -> Iterator[RawRow]:
         """Split out from `rows()` so the header check and row-shaping logic
-        can be unit-tested without a real Sheets connection.
-
-        Header cells are whitespace-normalized (see _normalize_header)
-        before anything else, so the dict keys built here — and therefore
-        every `row.get("...")` downstream in etl.py — line up with
-        EXPECTED_HEADERS regardless of which cosmetic spacing variant the
-        real sheet happens to use.
-
-        Checks that every EXPECTED_HEADERS name is present — order and extra
-        columns are fine, since rows are matched by header name, not
-        position — and raises immediately rather than silently loading a
-        sheet whose structure has drifted. A row shorter than the header
-        (gspread already pads these, but the source's contract shouldn't
-        depend on that) just yields fewer keys; downstream code already
-        treats a missing key the same as a blank cell.
-        """
-        if not values:
-            return
-        raw_header, *data_rows = values
-        header = [_normalize_header(h) for h in raw_header]
-        missing = [h for h in EXPECTED_HEADERS if h not in header]
-        if missing:
-            raise SheetHeaderError(
-                f"Sheet's header row is missing expected column(s): {missing}. "
-                f"Has the sheet's structure changed since EXPECTED_HEADERS "
-                f"was written?"
-            )
-        for row in data_rows:
-            yield dict(zip(header, row))
+        (shared with the lab-sample loader, see sources.base.rows_from_values)
+        can be unit-tested without a real Sheets connection."""
+        return rows_from_values(values, EXPECTED_HEADERS, SheetHeaderError)

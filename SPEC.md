@@ -192,27 +192,41 @@ Real, unresolved prep work sits in front of any code here — the sheet's
 data needs to be understood and cleaned up before it can be loaded, the
 same way the main sheet was.
 
-- [ ] **E1. Get read access and map the sheet's real structure.** Document
-      its actual columns, naming quirks, and known dirtiness in
-      `docs/flavor_sample_sheet_layout.md`, the same way the main sheet's
-      shape was established before B2 was built. No code yet.
-      *Why: the main sheet's own header row had three whitespace quirks
-      EXPECTED_HEADERS didn't anticipate, found only by actually running
-      against it. Assume this sheet has its own surprises and find them by
-      looking, not by guessing.*
-      DoD: layout doc committed; no code changes.
-- [ ] **E2. Decide the identifier strategy and cleanup plan.** Most rows
-      have no DTF Part # yet — decide what identifies a row instead (a
-      vendor code? a temporary sample id?) and what "clean enough to load"
-      means for this sheet specifically.
-      *Why: this is real, unresolved messiness the user flagged directly,
-      not a coding problem. Settling the identifier shape before writing
-      cleaning/loading logic avoids building it around a wrong assumption.*
-      DoD: a short design note (same doc as E1, or a new one) naming the
-      identifier strategy and the specific dirt it has to handle.
-- [ ] **E3. Build the source + load path.** Not yet scoped — deliberately
-      left open until E1/E2 are done, rather than guessing at a DoD before
-      the sheet's real shape and identifier strategy are known.
+- [x] **E1. Get read access and map the sheet's real structure.** Documented
+      in `docs/flavor_sample_sheet_layout.md`, established from two real CSV
+      exports of the live sheet (the header changed between them — a Part #
+      column was added, one label was reworded).
+      DoD: layout doc committed — done.
+- [x] **E2. Decide the identifier strategy and cleanup plan.** Documented in
+      the same file: DTF Part # first, falling back to Sample Code found as
+      a substring of the warehouse Material Name. A lab sample matching
+      neither is out of scope for the (not-yet-built) combined-location
+      view, not an error. No fuzzy name-matching, ever — two vendors'
+      "Vanilla" must never be silently merged.
+      DoD: design note committed — done.
+- [x] **E3. Build the source + load path.** `lab_samples` table
+      (`db/schema.sql`) + `dtf_materials/lab_samples.py`, loading via the
+      `[lab_sheet]` config section with the same header-whitespace
+      normalization proven necessary for the main sheet. Flags duplicate
+      sample codes rather than silently picking one.
+      DoD: `python -m dtf_materials.lab_samples` loads the real tab on a
+      configured machine — tested against real exported data in this
+      session; a live run against the actual sheet is still needed on a
+      configured machine to fully confirm (same caveat B2 had before its
+      first real run).
+- [x] **E4. Lab Samples search tab in the app.** `search_lab_samples` /
+      `get_lab_sample` in `queries.py`, and a new "Lab Samples" tab
+      mirroring "Material lookup"'s live-search UX — search by vendor,
+      flavor name, sample code, or Part #, then a detail view showing every
+      field (including the sensory ones that are mostly blank right now —
+      shown anyway, since blank means "not recorded yet," not broken).
+      DoD: verified in a live browser run against real sample data.
+
+**Not yet built**, left for later:
+- The combined warehouse+lab location view using the E2 matching strategy
+- A lab-specific quality report, or an in-app warnings tab surfacing
+  flagged issues (duplicate codes, cross-vendor collisions) the way the
+  main inventory's quality report does
 
 ### Phase D — Portfolio polish (last, small)
 
