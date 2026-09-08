@@ -2,25 +2,74 @@
 
 [![CI](https://github.com/dislam7991/materials-master-db/actions/workflows/ci.yml/badge.svg)](https://github.com/dislam7991/materials-master-db/actions/workflows/ci.yml)
 
-A small internal data platform for a supplement contract manufacturer with no ERP:
-a SQLite materials master database, a Python ETL pipeline that feeds it from the
-company's inventory spreadsheet, a data-quality report that surfaces the mess the
-spreadsheet-only workflow creates, and a Streamlit lookup app.
+A small internal data platform for a supplement contract manufacturer with no ERP.
+It reads the company's live Google Sheets, cleans them, and lands them in a SQLite
+database with a Streamlit lookup app on top. Two separate sources feed it:
 
-**All data in this repository is synthetic.** The generator in
+* **the warehouse raw-material inventory sheet** → `materials` / `lots` /
+  `lot_locations`, the materials master proper;
+* **the R&D lab's flavor sample catalog** — a second, unrelated Google Sheet on a
+  different account → the `lab_samples` table and its own search tab in the app.
+
+Alongside them, a data-quality report that names every dirty row in the inventory
+source, as evidence of the mess the spreadsheet-only workflow creates.
+
+**No real data lives in this repository.** The generator in
 `scripts/generate_synthetic_sheet.py` produces a fake inventory sheet with the same
-column structure and the same kinds of dirtiness as the real one. The connection to
-the real source lives in a local, gitignored config and is never committed.
+column structure and the same kinds of dirtiness as the real one, and that is what
+the tests and CI run against. The connections to the real sheets live in a local,
+gitignored `config.local.toml` and are never committed.
 
 ## Status
 
-- [x] Schema + database initialization
-- [x] Synthetic dirty-data generator
-- [x] ETL: extract → stage → validate → load
-- [x] Data-quality report
-- [x] Streamlit lookup app
-- [x] Google Sheets source adapter (real data, local config only)
-- [ ] Sample-request ingestion (Excel) and material↔sample history
+The full plan, with definitions of done and the reasoning behind each scope
+decision, is in [SPEC.md](SPEC.md). This is the summary.
+
+**Built and working:**
+
+- [x] Schema + idempotent database initialization
+- [x] Synthetic dirty-data generator (seeded, real column structure)
+- [x] ETL: extract → stage → validate → load, atomic and idempotent
+- [x] Data-quality report citing exact source rows, `--out` to Markdown
+- [x] Streamlit lookup app — material lookup, location lookup, all-materials table
+- [x] **Phase A — hardening.** Pytest suites for `cleaning.py` and for the three
+      ETL load invariants; GitHub Actions CI running the whole pipeline plus the
+      tests on every push
+- [x] **Phase B — real inventory source.** Local config loader (`config.local.toml`
+      + committed `config.example.toml`), `SheetsInventorySource`, and a confirmed
+      first run against the live company sheet on a configured machine
+- [x] **Phase E — lab sample catalog.** The second sheet mapped and documented
+      ([docs/flavor_sample_sheet_layout.md](docs/flavor_sample_sheet_layout.md)),
+      the `lab_samples` table and its loader, and a Lab Samples search tab in the app
+- [x] Windows one-click launcher ([run_app.bat](run_app.bat)) for handing the app
+      to someone who won't run commands
+
+**Remaining (Phase D — portfolio polish):**
+
+- [ ] **D1.** README top section: problem statement, a screenshot of the app, the
+      quality-report sample, quickstart. *(This update covers the plan/status half;
+      the screenshot is still missing, so D1 stays open in SPEC.md.)*
+- [ ] **D2.** Repo hygiene: LICENSE (MIT), `.gitattributes` for line endings, a
+      short CONTRIBUTING note saying this is a personal portfolio project
+
+**Parked — Phase C (sample-request ingestion).** Parsing the loose Excel
+sample-request files into `samples` / `sample_materials`, so material usage history
+exists in one place. It was goal 5 of the original plan; nobody is asking for it, so
+it is parked rather than deleted — the tasks stay in SPEC.md in the right order in
+case material usage history is ever actually wanted. Note this is a different thing
+from Phase E: sample *requests* from clients, not the lab's catalog of vendor
+flavor samples.
+
+**Known gaps, deliberately not built yet** (the reasoning is in SPEC.md):
+
+- No combined warehouse + lab location view. The matching strategy is decided and
+  documented (Part # first, falling back to Sample Code found inside the warehouse
+  material name; never fuzzy name matching), but nothing uses it yet.
+- No lab-specific quality report. The loader flags duplicate sample codes on stdout;
+  there is no equivalent of `quality_report.py` for the lab sheet.
+- No parser for the lab's location codes (`A-2-1`-style, and plain-English ones
+  alongside them), and declaration-type tags whose order varies (`Natural, WONF` vs
+  `WONF, Natural`) still read as two distinct categories.
 
 ## Quickstart
 
@@ -74,6 +123,45 @@ This launches against whatever database is already there — synthetic by
 default, or real data if `config.local.toml` is set up (see above) and
 someone has already run `--source sheets` once.
 
+## Repository layout
+
+```
+dtf_materials/
+  db.py             schema init (idempotent; safe to re-run)
+  cleaning.py       pure parsers: raw string in, clean value or None out, never raises
+  etl.py            the load: staging -> materials/lots/lot_locations
+  quality_report.py reads staging, names every dirty source row (--out for Markdown)
+  lab_samples.py    the second sheet: loads the R&D lab's flavor sample catalog
+  config.py         reads the gitignored config.local.toml ([sheets], [lab_sheet])
+  queries.py        every read the app makes; no Streamlit import
+  sources/          base.py (the interface), csv_source.py, sheets_source.py
+app.py              Streamlit UI only
+db/schema.sql       the schema, with its reasoning in comments
+scripts/            synthetic sheet generator
+docs/               flavor sheet layout + decisions, sample quality report
+tests/              pytest suites (see below)
+```
+
+## Tests and CI
+
+```
+python -m pytest
+```
+
+Suites cover the cleaning parsers, the three ETL load invariants (stable
+material ids under a re-sorted source, a crash mid-load leaving prior data
+intact, two consecutive runs producing identical tables), the config loader,
+the quality report, the Sheets header handling, and the lab-sample loader. The
+Sheets suite skips itself when `gspread` isn't installed, so a machine that
+only runs the synthetic pipeline still gets a clean run.
+
+[CI](.github/workflows/ci.yml) runs on every push and pull request: it installs
+*only* pytest, then runs the generator, the ETL, the quality report, and the
+test suite. Installing nothing else is deliberate — a new third-party import
+sneaking into `dtf_materials/` fails the job instead of passing quietly. CI is
+synthetic-only; it has no config and no service account key, so anything
+defined by a live-sheet run has to be confirmed by a human.
+
 ## The lookup app
 
 See [app.py](app.py) (UI only) and [dtf_materials/queries.py](dtf_materials/queries.py)
@@ -113,11 +201,27 @@ See [dtf_materials/etl.py](dtf_materials/etl.py), [dtf_materials/cleaning.py](dt
 and [dtf_materials/sources/](dtf_materials/sources/).
 
 **Source is an interface, not a file format.** `InventorySource.rows()` yields
-dicts keyed by the sheet's own header names. `CsvInventorySource` is the only
-implementation today; a future `SheetsInventorySource` reading from the real
-Google Sheet (via a gitignored local config) plugs in without changing
-`etl.py`, `cleaning.py`, or the schema at all. This is the portability
-requirement: swap the source, not the pipeline.
+dicts keyed by the sheet's own header names. There are two implementations:
+`CsvInventorySource` (the default, reading the synthetic sheet) and
+`SheetsInventorySource` (the real Google Sheet, via the gitignored local
+config). Adding the second one changed nothing in `etl.py`, `cleaning.py`, or
+the schema — which is what the interface was for. This is the portability
+requirement, and it has now been paid off rather than merely promised: swap
+the source, not the pipeline.
+
+`gspread`/`google-auth` are imported only inside the `--source sheets` branch,
+so the default pipeline, the app, and CI never need them and the core ETL
+stays stdlib-only.
+
+**Real header rows have cosmetic whitespace; the reader normalizes it.** The
+live sheet's header row turned out to spell the same columns differently from
+the synthetic one — `Lot / Batch` vs `Lot/Batch`, `Category (1 Raw) (2 Flavor)`
+vs `Category (1 Raw)(2 Flavor)`, trailing spaces. `normalize_header_name` in
+[dtf_materials/sources/base.py](dtf_materials/sources/base.py) collapses
+whitespace *around punctuation only*, never inside the words, so it cannot make
+two genuinely different columns collide. A column that is actually missing
+after normalization is still a hard error: rows are matched by header name, not
+position, so a silently-renamed column would otherwise load as all-blanks.
 
 **Two-pass load: stage first, always.** Every source row lands in
 `staging_inventory_raw` as untyped text before any cleaning happens. Cleaning
@@ -172,6 +276,40 @@ finding cites the exact source row number.
 run, written by `python -m dtf_materials.quality_report --out PATH`, which
 saves the same findings the command prints as a Markdown file you can link
 or hand to someone who will never run a Python command.
+
+## The lab sample catalog
+
+See [dtf_materials/lab_samples.py](dtf_materials/lab_samples.py) and
+[docs/flavor_sample_sheet_layout.md](docs/flavor_sample_sheet_layout.md).
+
+A second Google Sheet, on a personal account rather than the company one,
+listing the flavor samples physically sitting in the R&D lab. It is a separate
+source with a separate loader feeding a separate table, and the app searches it
+in its own tab — deliberately independent of the warehouse inventory, because
+the two answer different questions and most lab samples have no DTF Part # at
+all.
+
+**One service account, two sheets.** A service account is an identity and
+sharing is per file, so the same key reads both sheets once each is shared with
+its email as **Viewer**. The config grows a `[lab_sheet]` section rather than a
+second credential, and that section's key path falls back to `[sheets]` when
+omitted.
+
+**Mapping the sheet came before loading it.** The first export was not a table:
+the header sat on row 3 under a title banner, and an unrelated two-column
+"Taste and Aroma Lexicon" was parked in columns X–Y sharing row numbers with
+the first 13 real records, so any reader taking whole rows would have stapled
+reference prose onto inventory. Both were fixed in the sheet itself rather than
+worked around in code — cleaning up a source you control beats teaching the
+parser to tolerate it. The structural findings, column fill rates, and the
+decisions that came out of them are written down in the layout doc.
+
+**Two identifier questions, kept separate.** What identifies a row *within*
+`lab_samples` is a surrogate id, because Sample Code collides; how a lab sample
+*links to* a warehouse material is Part # first, falling back to Sample Code
+appearing inside the warehouse material name. Never fuzzy name matching — two
+vendors' "Vanilla" must not be silently merged. The link is designed but the
+combined location view that would use it isn't built yet.
 
 ## Schema design
 
@@ -229,3 +367,16 @@ dates are stored as `yyyy-mm-dd` text, which sorts and compares correctly.
 **Category mirrors the source (`raw`/`flavor`) with a CHECK constraint.** The sheet
 only knows two categories; the database stays honest to that rather than inventing
 data. Finer categories (colorant, masking agent) can come later as a lookup table.
+
+**`lab_samples` is flat, and not a foreign key into `materials`.** The lab
+catalog gets one table, not the staging + typed pair that `materials`/`lots`
+uses, because there is no one-to-many relationship to model — each source row
+already *is* one physical sample sitting on a lab shelf. It keeps `source_row`
+for the same reason staging does: so a future lab quality report can cite exact
+sheet rows. `dtf_part_num` is nullable and deliberately *not* a foreign key —
+most lab samples don't have a Part # yet (they are samples-in-waiting, not yet
+adopted into inventory), and even once one is filled in, linking a sample to a
+warehouse material is a display-time join, not a constraint this table should
+enforce. `lab_sample_id` is a surrogate key because Sample Code is not unique in
+the real sheet: it collided 22 ways in the first export, and the loader flags
+those rather than silently picking a winner.
