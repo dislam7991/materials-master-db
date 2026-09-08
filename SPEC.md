@@ -355,3 +355,28 @@ Things that came up mid-task and are deliberately not built yet (rule 4).
   than the company one. `config.local.toml` currently describes exactly one
   sheet, so it grows a second section (or a list) when E3 lands. Noted here
   rather than built now, because E1/E2 may change what that section holds.
+
+- **`run_app.bat` has five setup gaps — see issue #15.** The launcher is the
+  one artifact aimed at someone who won't run commands, and it is the least
+  defended thing in the repo. The full write-up is in the issue; the short
+  version, worst first: a first run whose `pip install` fails leaves `venv\`
+  existing but unusable, and the `if not exist venv` guard then skips the
+  install forever; the venv it builds omits `requirements-sheets.txt`, so
+  neither `--source sheets` nor `dtf_materials.lab_samples` can run from it;
+  the Lab Samples tab is empty with no explanation because nothing loads it;
+  the database is built once and never refreshed; and `where python` proves
+  a python exists but not that it is 3.11+ or even a real interpreter.
+
+  Filed rather than fixed because two of them are design choices, not missing
+  lines. Whether to install the sheets extras always or only when
+  `config.local.toml` is present is a real question. So is the empty lab tab:
+  the honest fix might be in `app.py` (say "no lab samples loaded" rather than
+  silently finding nothing), or it might be a synthetic lab-sample generator
+  paralleling `scripts/generate_synthetic_sheet.py` — which would also give
+  that tab test coverage and match the synthetic-first principle in section 2.
+  That last one is the only real work here; the rest is a batch-file
+  afternoon.
+
+  Decide it when the launcher is actually handed to someone. Everything above
+  is a prediction about a coworker who does not exist yet, and the first real
+  handoff will say which of the five actually matter.
