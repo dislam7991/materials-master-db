@@ -1,76 +1,47 @@
-# Flavor sample sheet — real layout (E1)
+# Flavor Sample Sheet — Layout & Decisions
 
-What the **DTF R&D Lab Inventory** sheet actually looks like, established by
-reading an export of its `Flavor Sample Inventory` tab rather than by
-guessing. This is the same groundwork that was done for the main inventory
-sheet before `SheetsInventorySource` was written (B2), and for the same
-reason: that sheet's header row turned out to have three whitespace quirks
-nobody predicted.
+Notes on the R&D lab's flavor sample catalog (Phase E), a second Google Sheet
+entirely separate from the warehouse inventory — different account, different
+shape, different purpose. Established the same way the main inventory's
+`EXPECTED_HEADERS` were: from real exports, not assumption.
 
-No flavor names, vendor names, sample codes, or prices appear here — only
+No flavor names, vendor names, sample codes, or prices are reproduced in
+this document beyond the small number needed as concrete examples — only
 shapes, counts, and vocabularies. The sheet itself stays out of the repo.
 
-**Snapshot:** 485 rows, 25 columns, 482 data rows.
+## Sheet identity
 
----
+- **Sheet**: "DTF R&D Lab Inventory"
+- **Tab**: "Flavor Sample Inventory"
+- Owned on a personal (non-company) Google account, shared with R&D staff and
+  with the same service account used for the main inventory.
 
-## 1. The tab is not a clean table
+## 1. Structural pass against the original export
 
-Three structural surprises, all of which break a naive "read the tab, first
-row is the header" reader:
+Before any cleanup, the tab was not a clean table. Three structural
+surprises, all of which break a naive "read the tab, first row is the
+header" reader:
 
-**The header is on row 3, not row 1.** Row 1 is a title banner
-(`Flavor Inventory Database` in column A, rest empty). Row 2 is entirely
-empty. Data starts on row 4.
+**The header sat on row 3, not row 1.** Row 1 was a title banner
+(`Flavor Inventory Database` in column A, rest empty); row 2 was entirely
+empty; data started on row 4.
 
-**A second, unrelated table is parked in columns X and Y.** Rows 4–16 of
-those two columns hold a "Taste and Aroma Lexicon" — a two-column reference
-list pairing 11 sensory dimensions with their suggested descriptors. It is
-documentation someone pasted beside the data,
-not inventory. It shares row numbers with the first 13 flavor rows, so any
-reader that takes whole rows will staple lexicon prose onto real records.
+**A second, unrelated table was parked in columns X and Y.** Rows 4–16 of
+those two columns held a "Taste and Aroma Lexicon" — a two-column reference
+list pairing 11 sensory dimensions with their suggested descriptors.
+Documentation someone pasted beside the data, not inventory — sharing row
+numbers with the first 13 flavor rows, so a reader that takes whole rows
+would staple lexicon prose onto real records.
 
-**Five trailing unnamed columns.** The header names 20 columns (A–T); the
-sheet is 25 wide. Columns U–W are entirely empty, X–Y hold the lexicon.
+**Five trailing unnamed columns.** The header named 20 columns (A–T); the
+sheet was 25 wide. Columns U–W were empty, X–Y held the lexicon.
 
-Consequences for whatever reads this tab: skip 2 rows, take a fixed 20-column
-slice, and ignore everything past column T.
+**Both of these have since been fixed by the user**: the lexicon table was
+moved to its own separate sheet, and the title/blank preamble rows were
+removed. The current header sits on row 1. See section 3 for the sheet as
+it exists now.
 
-## 2. Header row, verbatim
-
-Exactly as they appear, in order. Unlike the main sheet, these carry no
-leading, trailing, or doubled whitespace — the awkwardness here is in the
-wording, not the spacing.
-
-| Col | Header |
-|---|---|
-| A | `Vendor` |
-| B | `Flavor Name` |
-| C | `Sample Code` |
-| D | `Flavor Declaration Type (Natural, N&A, Artificial, WONF)` |
-| E | `Location (Lab)` |
-| F | `Flavor Family` |
-| G | `Category/Subcategory` |
-| H | `Usage Level (recom)` |
-| I | `Dry Aroma Descriptors` |
-| J | `Aroma Intensity 0-5` |
-| K | `Top Note` |
-| L | `Mid Palate Character` |
-| M | `Finish Note` |
-| N | `Off Note Tendency` |
-| O | `Matrix Performance` |
-| P | `Best Pairings` |
-| Q | `Tested In:` |
-| R | `Allergens` |
-| S | `Date Received` |
-| T | `Price` |
-
-Two to watch when these become constants: `Tested In:` ends in a colon, and
-the column D header embeds its own value list in parentheses.
-
-## 3. How full each column actually is
-
-Out of 482 data rows:
+### Column fill rates (original export, 482 data rows)
 
 | Column | Filled | Share |
 |---|---:|---:|
@@ -85,161 +56,150 @@ Out of 482 data rows:
 | `Dry Aroma Descriptors` | 21 | 4% |
 | `Aroma Intensity 0-5` | 20 | 4% |
 | `Price` | 17 | 4% |
-| `Tested In:` | 3 | <1% |
-| `Top Note` | 3 | <1% |
-| `Finish Note` | 3 | <1% |
-| `Usage Level (recom)` | 4 | <1% |
-| `Mid Palate Character` | 4 | <1% |
-| `Off Note Tendency` | 2 | <1% |
-| `Allergens` | 2 | <1% |
-| `Matrix Performance` | 1 | <1% |
-| `Best Pairings` | 0 | 0% |
+| everything else (K–P, R, `Tested In:`) | 0–4 each | <1% |
 
-The shape of this is worth naming plainly: **four columns are a real
-inventory, and sixteen are an aspiration.** The sensory panel (I–P) is
-someone's intended future state, filled in for a handful of rows. Columns
-K–P together hold 13 values across 482 rows.
+**Four columns are a real inventory, sixteen are an aspiration.** The
+sensory panel (columns I–P) is someone's intended future state, filled in
+for a handful of rows — this is exactly why the app shows every field even
+when blank (see "What's built so far" below), rather than waiting for full
+data before it's useful.
 
-## 4. Column-by-column detail
+### Notable per-column findings
 
-### `Vendor` (A)
-14 distinct values, all consistently spelled — no case or spacing variants
-that normalize to the same company. This is cleaner than the main sheet,
-where supplier aliasing was needed.
+- **`Sample Code` is not unique** — see section 2, the finding that matters
+  most.
+- **`Flavor Declaration Type`** is effectively a controlled vocabulary (7
+  distinct values), but `Natural, WONF` and `WONF, Natural` appear as
+  separate values — the same declaration written in two orders, which a
+  strict equality check treats as two categories. It's really a *set* of
+  tags stored as a comma-joined string. **Still unhandled** — no code
+  normalizes tag order today.
+- **`Location (Lab)`** used three formats (a code like `A-2-1`, a
+  three-word prose description, or a different code shape like `A-CB2-D1`)
+  — **none of which match the warehouse's `6L-27-D` format**, so the
+  existing location parser does not apply here. **Still unhandled.**
+- **`Category/Subcategory` and `Usage Level` were muddled**: 20 of 74
+  Category/Subcategory values were actually usage-level percentages
+  (`0.20 - 0.40%`) that belonged in the Usage Level column instead, which
+  itself held only 4 values. The usage level a person would look for lived
+  in the wrong column five times more often than the right one.
+- **`Price`** carried both a currency symbol and a unit suffix in the same
+  cell (`$NN.NN/kg`, a couple of `NN.N/lb`) — two things embedded in one
+  string, not directly comparable until parsed apart. **Since resolved**:
+  the column is now labeled `Price ($/kg)` and cells are unit-free (see
+  section 3) — `cleaning.parse_price` already handles the current format
+  correctly.
 
-### `Flavor Name` (B)
-Free text, always present. Plays the role `Material Name` plays in the main
-sheet.
+## 2. The identifier problem
 
-### `Sample Code` (C) — the identifier candidate
-Always present, and **not unique**. See section 5; this is the finding that
-matters most.
+Two distinct questions came up under "the identifier problem," worth
+answering separately rather than conflating:
 
-12 distinct shapes (digits shown as `#`, letters as `A`):
+### (a) What identifies a row within this sheet's own table?
 
-| Count | Shape |
-|---:|---|
-| 118 | `######` |
-| 84 | `A########` |
-| 82 | `A##-######` |
-| 39 | `####A` |
-| 34 | `#######` |
-| 28 | `#####` |
-| 24 | `#-####-####` |
-| 19 | `AA######` |
-| 13 | `AA-#####` |
-| 13 | `AA#####` |
-| 8 | `AAA####` |
-| 5 | `########` |
-
-The format is per-vendor, not house-wide — each vendor stamps its own
-catalog number. No code has leading, trailing, or internal whitespace, so
-no trimming is needed here.
-
-### `Flavor Declaration Type` (D)
-Always present, and effectively a controlled vocabulary — 7 distinct values
-across 482 rows:
-
-| Count | Value |
-|---:|---|
-| 333 | `Natural` |
-| 77 | `N&A` |
-| 68 | `Natural, WONF` |
-| 1 | `Natural, Halal` |
-| 1 | `WONF, Natural` |
-| 1 | `WONF, Organic` |
-| 1 | `Organic` |
-
-Note `Natural, WONF` and `WONF, Natural` — the same declaration written in
-two orders, which a strict equality check treats as two categories. The
-field is really a *set* of tags stored as a comma-joined string. The header
-advertises `Artificial` as a possible value; no row uses it.
-
-### `Location (Lab)` (E)
-10 distinct values, in three formats — and **none of them match the main
-sheet's `6L-27-D` warehouse format**. Existing location parsing does not
-apply here.
-
-| Count | Shape | Example |
-|---:|---|---|
-| 169 | `A-#-#` | `A-2-1` |
-| 83 | `AAAAAA AAAAAA AAA` | a three-word prose location |
-| 78 | `A-AA#-A#` | `A-CB2-D1` |
-
-The 83 prose entries are a plain-English description of where something
-sits, not a code. 152 rows (32%) have no location at all.
-
-### `Flavor Family` (F) and `Category/Subcategory` (G)
-Both sparse, and the pair is muddled:
-
-- `Flavor Family` is 23 values, all ALL-CAPS, drawn from a small taxonomy of
-  8 broad families (fruit, dessert, savory and the like). Some family terms
-  are also flavor names in their own right, so they are not enumerated here.
-- `Category/Subcategory` is 74 values with no fixed vocabulary — some are
-  single words, some are comma-joined descriptor lists, and casing is
-  inconsistent (21 ALL-CAPS, 53 mixed or lower).
-- **20 of those 74 are not categories at all — they are usage-level
-  percentages** (`0.20 - 0.40%`, `0.1-0.3%`, `0.05 - 0.35 %`) that belong in
-  column H. Column H itself holds only 4 values.
-
-So the usage level a person would look for lives in the wrong column five
-times more often than the right one.
-
-### `Date Received` (S)
-48 values, all `MM/DD/YYYY`. One clean format, unlike the main sheet.
-
-### `Price` (T)
-17 values, all carrying a unit and most carrying a currency symbol:
-`$NN.NN/kg` (14), `NN.NN/kg` (2), `NN.N/lb` (1). Two things are embedded in
-one cell — the amount and the unit of measure — and the unit is not constant,
-so these are not comparable numbers until parsed apart. The main sheet's
-price column has no unit suffix, so `cleaning.parse_price` will not handle
-these as-is.
-
-## 5. The identifier problem
-
-`Sample Code` looks like a primary key and is not one. Of 482 rows:
+`Sample Code` looks like a primary key and is not one. In the original
+export, of 482 rows:
 
 | Key | Distinct | Colliding keys |
 |---|---:|---:|
-| `Sample Code` | 459 | 22 |
+| `Sample Code` alone | 459 | 22 |
 | `(Vendor, Sample Code)` | 461 | 20 |
 | `(Vendor, Flavor Name, Sample Code)` | 470 | 12 |
 
-Splitting the 22 duplicated sample codes by what else differs:
-
-- **11 are exact repeats** — same vendor, same flavor name, same code, on
-  more than one row. Probably a re-received sample, or the same sample
-  entered twice.
-- **11 are genuine collisions** — the same code against a *different* flavor
-  name, and in two cases against a different vendor as well. One code covers
-  three rows and two different flavors.
-
-No column or combination of columns in this sheet uniquely identifies a row.
-Adding `Flavor Name` narrows it but still leaves 12 colliding keys.
+No column or combination uniquely identifies a row. Splitting the 22
+duplicated codes by what else differed: about half were exact repeats (same
+vendor, same flavor, same code — likely a re-received sample or a data-entry
+double-entry), and about half were genuine collisions — the same code
+against a *different* flavor, in two cases against a different vendor too.
+One code covered three rows and two different flavors.
 
 This is exactly the ambiguity the project's "flag, don't guess" principle
-exists for: the ETL must not silently merge two flavors that share a code,
-and it must not invent a distinguishing suffix. **Settling this is E2's job**
-— this document only establishes that the problem is real and sizes it at
-22 codes across 33 rows.
+exists for: the loader must not silently merge two flavors sharing a code,
+and must not invent a distinguishing suffix.
 
-## 6. What this means for E2 and E3
+**Decided and built**: `lab_samples` uses a surrogate `lab_sample_id`
+(auto-increment) as its real row identity — Sample Code is stored as a
+plain column, never the key. The loader (`dtf_materials/lab_samples.py`)
+flags every sample code seen on more than one row as a warning rather than
+deduplicating, merging, or picking one.
 
-Carried forward, not decided here:
+By the most recent real export (467 rows, after the user's cleanup — blank
+rows removed, several collisions manually fixed), 8 sample codes still
+collide. One is a **cross-vendor** collision (Prinova "Lime Key Type" vs.
+Virginia Dare "Lime", both `42936`) — the same category of issue as a
+Prinova/Virginia Dare Pistachio collision (`43582`) found and fixed earlier,
+confirming this pattern recurs and is worth watching for, not a one-off.
 
-1. **No natural key exists.** E2 has to choose: a surrogate id plus a
-   flagged-conflict report, a human-assigned sample id added to the sheet,
-   or a composite key that accepts the 12 remaining collisions as true
-   duplicates to be merged.
-2. **`materials.is_sample_only` and the nullable `dtf_part_num` fit.** No row
-   in this sheet has a DTF Part #, which is what those columns were added
-   for. Nothing in the schema needs to change to hold these rows.
-3. **The sensory columns are not worth modelling yet.** Sixteen columns hold
-   under 5% fill and one holds nothing. Loading four reliable columns plus
-   location, date, and price is the whole value here today.
-4. **Three cleaning gaps** the existing `cleaning.py` does not cover: prices
-   with a unit suffix, prose locations alongside coded ones, and declaration
-   tags whose order varies.
-5. **The lexicon block must be excluded by column, not by content.** It sits
-   in X/Y beside real rows; a row-level filter would drop real records.
+### (b) How does a lab sample link to a warehouse material?
+
+For the planned feature that shows a material's location across *both*
+sheets (warehouse + lab) — not yet built. A lab sample links to a warehouse
+`materials` row by, in order:
+
+1. **DTF Part #** — once the lab sheet's Part # column (added after this
+   structural pass; 0 of 467 rows filled in as of the most recent export)
+   is filled in for a row, match it directly against `materials.dtf_part_num`.
+2. **Sample Code as a substring of the warehouse Material Name** — the
+   observed real-world pattern (e.g. Sensapure "Mango 7182011" contains lab
+   sample code `7182011`). Used as a fallback when there's no Part # yet.
+
+A lab sample matching neither is simply not shown in that combined view —
+not an error, just not linked yet. No fuzzy name-matching, ever: two
+different vendors' "Vanilla" must never be silently treated as the same
+material.
+
+## 3. Real header, current state
+
+One clean header row, no preamble, as of the most recent real export:
+
+```
+Vendor | Flavor Name | Sample Code | Flavor Declaration Type (Natural, N&A,
+Artificial, WONF) | Location (Lab) | Flavor Family | Category/Subcategory |
+Usage Level (recommended) | Dry Aroma Descriptors | Aroma Intensity 0-5 |
+Top Note | Mid Palate Character | Finish Note | Off Note Tendency | Matrix
+Performance | Best Pairings | Tested In: | Allergens | Date Received |
+Price ($/kg) | Part # (If applicable)
+```
+
+The exact list lives in code as `dtf_materials.lab_samples.EXPECTED_LAB_HEADERS`
+— that's the source of truth the loader actually checks against; this doc is
+the human-readable version.
+
+**This header has already changed twice**: the original structural pass
+(section 1) predates the lexicon-table/preamble cleanup entirely, and
+between the two post-cleanup exports, "Usage Level (recom)" became "Usage
+Level (recommended)" and a Part # column was added. Treat it as something
+that can drift again, the same caution that applies to the main sheet.
+
+Note also: `Tested In:` ends in a colon, and the Flavor Declaration Type
+header embeds its own value list in parentheses — both are handled
+correctly by the existing whitespace-normalization logic (they aren't
+whitespace issues), just worth knowing if the exact string ever needs to be
+typed by hand.
+
+## What's built so far
+
+- `lab_samples` table (`db/schema.sql`) — flat, one row per sample, not
+  split into staging + typed tables like materials/lots (no one-to-many
+  relationship here to model). Uses a surrogate `lab_sample_id`, per the
+  identifier decision above.
+- `dtf_materials/lab_samples.py` — loader: connects via the `[lab_sheet]`
+  config section, validates the header (reusing the same whitespace
+  normalization proven necessary for the main sheet), full-reloads the
+  table each run, and flags duplicate sample codes rather than resolving
+  them silently.
+- `search_lab_samples` / `get_lab_sample` in `queries.py`, and a **Lab
+  Samples** tab in the app — search by vendor, flavor name, sample code, or
+  Part #, mirroring the main "Material lookup" tab's live-search UX. Every
+  field is shown in the detail view even when blank, since most of the
+  sensory columns are a work in progress, not broken.
+
+## Not built yet
+
+- The combined warehouse+lab location view using the section 2(b) matching
+  strategy
+- A lab-specific quality report, or an in-app warnings tab surfacing
+  flagged issues (duplicate codes, cross-vendor collisions) the way the
+  main inventory's quality report does
+- Cleaning for prose/differently-shaped lab locations (section 1) and
+  declaration-type tag order (section 1) — both still unhandled

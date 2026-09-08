@@ -116,3 +116,48 @@ CREATE TABLE IF NOT EXISTS sample_materials (
     unit         TEXT,
     PRIMARY KEY (sample_id, material_id)
 );
+
+-- Phase E: the R&D lab's flavor sample catalog (a second, separate Google
+-- Sheet — not the warehouse inventory, and not `samples` above, which is
+-- client sample *requests*). One row per physical sample sitting in the
+-- lab. Flat rather than split into a staging + typed pair like
+-- materials/lots: there's no one-to-many relationship here to model, each
+-- source row already *is* one sample. `source_row` still points back at the
+-- sheet for the same reason staging_inventory_raw does — citing exact rows
+-- in a quality report.
+--
+-- dtf_part_num is nullable and deliberately NOT a foreign key into
+-- materials: most lab samples don't have one yet (they're samples-in-
+-- waiting), and even once filled in, linking sample -> warehouse material
+-- is a display-time join (matched by Part #, see queries.py), not a
+-- structural relationship this table enforces.
+CREATE TABLE IF NOT EXISTS lab_samples (
+    lab_sample_id           INTEGER PRIMARY KEY,
+    source_row              INTEGER,        -- 1-based row number in the source sheet
+    vendor                  TEXT,
+    flavor_name             TEXT,
+    sample_code             TEXT,
+    declaration_type        TEXT,           -- Natural, N&A, Artificial, WONF
+    location_lab            TEXT,
+    flavor_family           TEXT,
+    category_subcategory    TEXT,
+    usage_level             TEXT,
+    dry_aroma_descriptors   TEXT,
+    aroma_intensity         TEXT,           -- kept as text: sheet allows "3-4" as well as "3"
+    top_note                TEXT,
+    mid_palate_character    TEXT,
+    finish_note              TEXT,
+    off_note_tendency       TEXT,
+    matrix_performance      TEXT,
+    best_pairings           TEXT,
+    tested_in               TEXT,
+    allergens               TEXT,
+    date_received            TEXT,          -- ISO yyyy-mm-dd
+    price_per_kilo           REAL,
+    dtf_part_num             TEXT,
+    ingested_at              TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_lab_samples_code ON lab_samples(sample_code);
+CREATE INDEX IF NOT EXISTS idx_lab_samples_name ON lab_samples(flavor_name);
+CREATE INDEX IF NOT EXISTS idx_lab_samples_part_num ON lab_samples(dtf_part_num);

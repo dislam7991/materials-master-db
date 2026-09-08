@@ -22,3 +22,15 @@ tab_name = "Raw Material Inventory"
 # quoted string, so a raw Windows path breaks parsing. Forward slashes work
 # fine on Windows too.
 service_account_key_path = "credentials/service_account.json"
+
+# The R&D lab's flavor sample catalog — a separate Google Sheet from the
+# warehouse inventory above (Phase E). Needed only for the lab-samples loader.
+[lab_sheet]
+sheet_id = "REPLACE_WITH_LAB_SHEET_ID"
+tab_name = "Flavor Sample Inventory"
+
+# Optional: omit this entirely to reuse [sheets].service_account_key_path
+# above — the common case is one service account shared across both sheets,
+# just share each sheet with that same account's email as a viewer. Only set
+# this if the lab sheet uses a different service account.
+# service_account_key_path = "credentials/service_account.json"

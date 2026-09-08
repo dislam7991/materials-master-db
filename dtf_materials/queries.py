@@ -59,6 +59,49 @@ def search_materials(conn: sqlite3.Connection, term: str, limit: int = 50) -> li
     ).fetchall()
 
 
+def search_lab_samples(conn: sqlite3.Connection, term: str, limit: int = 50) -> list[sqlite3.Row]:
+    """Search the R&D lab's flavor sample catalog by vendor, flavor name,
+    sample code, or DTF Part # (case-insensitive substring), same shape as
+    search_materials but against `lab_samples` — a separate table fed by a
+    separate Google Sheet, see db/schema.sql.
+
+    Ordered so exact/prefix Sample Code matches surface first, for the same
+    reason search_materials prioritizes Part # matches: someone typing a
+    code wants that exact sample, not the alphabetically-first flavor whose
+    name happens to contain the string.
+    """
+    if not term or not term.strip():
+        return []
+    term = term.strip()
+    pattern = _like(term)
+    return conn.execute(
+        """
+        SELECT lab_sample_id, vendor, flavor_name, sample_code, dtf_part_num,
+               flavor_family, location_lab
+        FROM lab_samples
+        WHERE vendor LIKE ? ESCAPE '!'
+           OR flavor_name LIKE ? ESCAPE '!'
+           OR sample_code LIKE ? ESCAPE '!'
+           OR dtf_part_num LIKE ? ESCAPE '!'
+        ORDER BY
+            CASE
+                WHEN UPPER(sample_code) = UPPER(?) THEN 0
+                WHEN UPPER(sample_code) LIKE UPPER(?) || '%' THEN 1
+                ELSE 2
+            END,
+            flavor_name
+        LIMIT ?
+        """,
+        (pattern, pattern, pattern, pattern, term, term, limit),
+    ).fetchall()
+
+
+def get_lab_sample(conn: sqlite3.Connection, lab_sample_id: int) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM lab_samples WHERE lab_sample_id = ?", (lab_sample_id,)
+    ).fetchone()
+
+
 def get_material(conn: sqlite3.Connection, material_id: int) -> sqlite3.Row | None:
     return conn.execute(
         """
