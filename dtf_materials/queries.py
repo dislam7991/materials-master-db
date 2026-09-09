@@ -229,14 +229,25 @@ def get_last_known_locations(conn: sqlite3.Connection, material_id: int) -> list
 
 def search_by_location(conn: sqlite3.Connection, prefix: str, limit: int = 200) -> list[sqlite3.Row]:
     """What is stored at (or under) a location code. A bare aisle prefix like
-    '6L' matches every position in it."""
+    '6L' matches every position in it.
+
+    Unlike the material-page queries, this one deliberately does NOT filter
+    out lots flagged Ready To Archive. The two views answer different
+    questions: a material's page answers "can I use this?", where an archived
+    lot is a no, while this answers "what is physically on this shelf?", where
+    the drum really is sitting there and hiding it would make the app
+    disagree with the warehouse. `ready_to_archive` is returned so the caller
+    can label those rows rather than silently mixing them in — the flag comes
+    straight from the sheet's own Ready To Archive column, so this reports
+    what the sheet says and nothing more.
+    """
     if not prefix or not prefix.strip():
         return []
     pattern = _like(prefix.strip().upper()).rstrip("%") + "%"
     return conn.execute(
         """
         SELECT ll.location, m.dtf_part_num, m.material_name,
-               l.current_stock, l.dtf_lot_num, l.exp_date
+               l.current_stock, l.dtf_lot_num, l.exp_date, l.ready_to_archive
         FROM lot_locations ll
         JOIN lots l ON l.lot_id = ll.lot_id
         JOIN materials m ON m.material_id = l.material_id

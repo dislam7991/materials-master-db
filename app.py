@@ -204,17 +204,27 @@ with tab_location:
             st.warning(f"Nothing in stock at “{loc.upper()}”.")
         else:
             st.write(f"**{len(found)} items at or under {loc.upper()}**")
-            st.dataframe(
-                rows_to_df(found, {
-                    "location": "Location",
-                    "dtf_part_num": "Part #",
-                    "material_name": "Material",
-                    "current_stock": "Stock",
-                    "dtf_lot_num": "DTF Lot #",
-                    "exp_date": "Expires",
-                }),
-                hide_index=True, width="stretch",
-            )
+            shelf = rows_to_df(found, {
+                "location": "Location",
+                "dtf_part_num": "Part #",
+                "material_name": "Material",
+                "current_stock": "Stock",
+                "dtf_lot_num": "DTF Lot #",
+                "exp_date": "Expires",
+                "ready_to_archive": "Status",
+            })
+            shelf["Status"] = shelf["Status"].map(lambda flag: "Archived" if flag else "")
+            st.dataframe(shelf, hide_index=True, width="stretch")
+
+            archived = sum(1 for r in found if r["ready_to_archive"])
+            if archived:
+                subject = "One of these is" if archived == 1 else f"{archived} of these are"
+                st.caption(
+                    f"{subject} flagged Ready To Archive in the sheet. "
+                    "They are listed because they are still physically on the shelf, "
+                    "but they are not counted as available stock on the material's "
+                    "own page."
+                )
 
 with tab_all:
     st.write(
