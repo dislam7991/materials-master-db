@@ -236,11 +236,17 @@ Material Name. Both are documented in `docs/flavor_sample_sheet_layout.md`.
 
 ### Phase D — Portfolio polish (last, small)
 
-- [ ] **D1. README top section rewrite**: 3-sentence problem statement, a
+- [x] **D1. README top section rewrite**: 3-sentence problem statement, a
       screenshot of the app, the quality-report sample, quickstart. The
       design-decision prose already written stays.
       DoD: a stranger can understand and run the project from the README
       alone.
+      *Screenshot is `docs/app_screenshot.png` — the material lookup tab on the
+      synthetic sheet, chosen because that one view shows the metrics, the
+      location table, the split-lot warning, the lot history and the price
+      chart at once. Synthetic by necessity as well as principle: rule 5 of
+      section 7 forbids committing a real material name, and a screenshot of
+      the real sheet's data is exactly that.*
 - [ ] **D2. Repo hygiene pass**: LICENSE (MIT), `.gitattributes` for line
       endings (kills the CRLF warning noise), short CONTRIBUTING note that
       this is a personal portfolio project.

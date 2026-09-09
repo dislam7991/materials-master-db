@@ -2,9 +2,31 @@
 
 [![CI](https://github.com/dislam7991/materials-master-db/actions/workflows/ci.yml/badge.svg)](https://github.com/dislam7991/materials-master-db/actions/workflows/ci.yml)
 
-A small internal data platform for a supplement contract manufacturer with no ERP.
-It reads the company's live Google Sheets, cleans them, and lands them in a SQLite
-database with a Streamlit lookup app on top. Two separate sources feed it:
+## The problem
+
+A supplement contract manufacturer with no ERP keeps every raw material in one
+shared Google Sheet and the R&D lab's flavor samples in another. Answering "where
+is this material, what did it cost, who supplies it?" means scrolling a
+spreadsheet that carries the same part number on two different materials, five
+spellings of the same supplier, and prices that aren't numbers. This project
+reads those sheets into a queryable SQLite database with a search app on top,
+and prints a report naming every dirty row it found instead of quietly papering
+over it.
+
+![The material lookup tab: a material's price, supplier, category and allergen, the locations holding it, its lot history, and its price per kilo over time](docs/app_screenshot.png)
+
+*Material lookup, running on the synthetic sheet in this repo — no real material
+names, prices or suppliers appear anywhere in it. The warning under the location
+table is the design principle in miniature: the sheet records one quantity per
+lot and never how it splits across locations, so the app says so rather than
+dividing the number up. See [docs/quality_report_sample.md](docs/quality_report_sample.md)
+for what the data-quality report has to say about the same data.*
+
+## What it is
+
+A small internal data platform. It reads the company's live Google Sheets, cleans
+them, and lands them in a SQLite database with a Streamlit lookup app on top. Two
+separate sources feed it:
 
 * **the warehouse raw-material inventory sheet** → `materials` / `lots` /
   `lot_locations`, the materials master proper;
@@ -19,6 +41,27 @@ source, as evidence of the mess the spreadsheet-only workflow creates.
 column structure and the same kinds of dirtiness as the real one, and that is what
 the tests and CI run against. The connections to the real sheets live in a local,
 gitignored `config.local.toml` and are never committed.
+
+## Quickstart
+
+Clone it and run these five lines. Nothing needs configuring: the generator
+writes the fake sheet, so the pipeline has data to chew on from a cold start.
+
+```
+python dtf_materials/db.py                    # create db/materials.db from db/schema.sql
+python scripts/generate_synthetic_sheet.py    # write data/synthetic/raw_material_inventory.csv
+python -m dtf_materials.etl                    # stage + load the sheet into the DB
+python -m dtf_materials.quality_report         # print the dirty-data findings
+streamlit run app.py                           # launch the lookup app
+```
+
+Requires Python 3.11+. The pipeline is stdlib-only; `pip install -r
+requirements.txt` is needed only for the last line, the app. `python -m pytest`
+runs the test suite (`pip install -r requirements-dev.txt`).
+
+Everything above runs against synthetic data. Connecting the real sheets is
+[its own section below](#connecting-the-real-sheets), and needs credentials
+that are not in this repository.
 
 ## Status
 
@@ -43,12 +86,11 @@ decision, is in [SPEC.md](SPEC.md). This is the summary.
       the `lab_samples` table and its loader, and a Lab Samples search tab in the app
 - [x] Windows one-click launcher ([run_app.bat](run_app.bat)) for handing the app
       to someone who won't run commands
+- [x] **D1.** README top section: problem statement, screenshot, quality-report
+      sample, quickstart
 
 **Remaining (Phase D — portfolio polish):**
 
-- [ ] **D1.** README top section: problem statement, a screenshot of the app, the
-      quality-report sample, quickstart. *(This update covers the plan/status half;
-      the screenshot is still missing, so D1 stays open in SPEC.md.)*
 - [ ] **D2.** Repo hygiene: LICENSE (MIT), `.gitattributes` for line endings, a
       short CONTRIBUTING note saying this is a personal portfolio project
 
@@ -71,18 +113,7 @@ flavor samples.
   alongside them), and declaration-type tags whose order varies (`Natural, WONF` vs
   `WONF, Natural`) still read as two distinct categories.
 
-## Quickstart
-
-```
-python dtf_materials/db.py                    # create db/materials.db from db/schema.sql
-python scripts/generate_synthetic_sheet.py    # write data/synthetic/raw_material_inventory.csv
-python -m dtf_materials.etl                    # stage + load the sheet into the DB
-python -m dtf_materials.quality_report         # print the dirty-data findings
-streamlit run app.py                           # launch the lookup app
-```
-
-The pipeline is stdlib-only; `pip install -r requirements.txt` is needed only
-for the app.
+## Connecting the real sheets
 
 To load from the real Google Sheet instead of the synthetic CSV, set up
 `config.local.toml` (copy `config.example.toml` — see that file for the
