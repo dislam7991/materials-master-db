@@ -307,25 +307,39 @@ def test_a_blank_search_term_returns_no_rows(conn):
 
 
 # --------------------------------------------------------------------------
-# Characterization — current behaviour, pending a decision
+# Rack view: archived lots are shown, not hidden
 # --------------------------------------------------------------------------
-# Both of these describe what search_by_location does today rather than what
-# it necessarily should do. They are recorded in SPEC.md's Backlog; when
-# either question is answered, the answer changes the assertion here
-# deliberately instead of surfacing as a surprise failure.
 
-def test_search_by_location_currently_includes_archived_lots(conn):
-    """Unlike every other stock query, search_by_location does not filter
-    ready_to_archive — so an archived drum is invisible on its material's
-    own page but visible when browsing the rack it sits in.
+def test_rack_browsing_shows_archived_lots_and_flags_them(conn):
+    """The rack view answers a different question from the material page.
 
-    Arguably correct (the drum really is on that shelf) and arguably a bug.
-    See SPEC.md Backlog.
+    A material's page answers "can I use this?", where a lot flagged Ready
+    To Archive is a no and is filtered out. Browsing a rack answers "what is
+    physically on this shelf?" — the drum is still there, and hiding it would
+    make the app disagree with the warehouse. So the row is returned, and
+    `ready_to_archive` comes back with it so the UI can label it rather than
+    mixing it in silently. The flag is the sheet's own column, not a
+    judgement this code makes.
     """
     results = q.search_by_location(conn, "6L-30-B")
 
     assert part_nums(results) == {"RM-0004"}
+    assert results[0]["ready_to_archive"] == 1
 
+    # And the same query still reports unarchived stock as unarchived, so the
+    # label means something.
+    unarchived = q.search_by_location(conn, "6L-27-D")
+    assert part_nums(unarchived) == {"RM-0001"}
+    assert unarchived[0]["ready_to_archive"] == 0
+
+
+# --------------------------------------------------------------------------
+# Characterization — current behaviour, pending a decision
+# --------------------------------------------------------------------------
+# Describes what search_by_location does today rather than what it
+# necessarily should do. Recorded in SPEC.md's Backlog; when the question is
+# answered, the answer changes the assertion here deliberately instead of
+# surfacing as a surprise failure.
 
 def test_location_search_currently_matches_a_prefix_anywhere_in_the_code(conn):
     """Aisle search is a substring match, not an anchored prefix.

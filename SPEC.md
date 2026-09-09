@@ -429,22 +429,23 @@ Things that came up mid-task and are deliberately not built yet (rule 4).
   decision — but revisit it explicitly, as its own entry here, rather than
   drifting into a scheduler because it seemed convenient.
 
-- **`search_by_location` doesn't filter `ready_to_archive`.** Surfaced while
-  writing A5. Every other stock query excludes archived lots
+- ~~**`search_by_location` doesn't filter `ready_to_archive`.**~~ Resolved:
+  keep archived lots visible when browsing a rack, and label them. Surfaced
+  while writing A5 — every other stock query excludes archived lots
   (`get_stocked_locations`, `total_stock`, `unlocated_stock`,
-  `list_materials`); this one does not. So a drum flagged Ready To Archive is
-  invisible on its own material's page but still appears when someone browses
-  the rack it sits in.
+  `list_materials`) and this one does not.
 
-  Left alone because it is genuinely unclear which behavior is right, and
-  that is exactly the kind of thing rule 4 says to write down rather than
-  quietly "fix". The material page answers "can I use this?", where archived
-  means no. The location view answers "what is physically on this shelf?",
-  where the drum really is there and hiding it would make the app disagree
-  with the warehouse. A plausible resolution is to keep it visible and label
-  it, rather than to filter it. Decide it the first time the discrepancy
-  confuses somebody. Current behavior is pinned by
-  `test_search_by_location_currently_includes_archived_lots`.
+  Answered by separating the two questions. A material's page answers "can I
+  use this?", where archived means no. The rack view answers "what is
+  physically on this shelf?", where the drum really is there and hiding it
+  would make the app disagree with the warehouse. So the row stays, and
+  `search_by_location` now also returns `ready_to_archive` so the app can
+  show a "Status" column reading `Archived`, with a caption explaining why a
+  row appears here but not in the material's own stock figures.
+
+  No new data and no inference: the flag is the sheet's own Ready To Archive
+  column, parsed by `cleaning.parse_bool_flag` exactly as it already was.
+  Pinned by `test_rack_browsing_shows_archived_lots_and_flags_them`.
 
 - **Aisle search is a substring match, not an anchored prefix.** Also from
   A5. `search_by_location` builds its pattern as
