@@ -133,6 +133,20 @@ done (DoD). Do them in order; later tasks assume earlier ones.
       *Why: a linkable artifact for the README and for showing the mess at
       work; trivial scope.*
       DoD: flag works; sample output committed as `docs/quality_report_sample.md`.
+- [x] **A5. Pytest for `queries.py`.** The read side had no tests at all,
+      which put every "never fabricate data" promise in untested SQL: the
+      split-lot flag, the unlocated-stock figure, the last-known-location
+      fallback, NULL-date ordering, and the LIKE-wildcard escaping. Covered
+      in `tests/test_queries.py` by hand-written source rows run through the
+      real `etl.run()` — one small sheet where each material isolates one
+      behaviour — so no fixture can describe a database state the ETL could
+      not actually produce.
+      *Why: A1 and A2 hardened the write side; a refactor that made
+      `total_stock` sum location rows would have invented inventory that does
+      not exist and left the suite green.*
+      DoD: `python -m pytest` covers and passes all of them; verified to bite
+      by mutating `total_stock` to sum `lot_locations` and confirming the
+      split-lot and reconciliation tests fail.
 
 ### Phase B — Real inventory source (the point of the project)
 
@@ -414,3 +428,35 @@ Things that came up mid-task and are deliberately not built yet (rule 4).
   auto-refresh for a shared database is a genuine reason to revisit that
   decision — but revisit it explicitly, as its own entry here, rather than
   drifting into a scheduler because it seemed convenient.
+
+- **`search_by_location` doesn't filter `ready_to_archive`.** Surfaced while
+  writing A5. Every other stock query excludes archived lots
+  (`get_stocked_locations`, `total_stock`, `unlocated_stock`,
+  `list_materials`); this one does not. So a drum flagged Ready To Archive is
+  invisible on its own material's page but still appears when someone browses
+  the rack it sits in.
+
+  Left alone because it is genuinely unclear which behavior is right, and
+  that is exactly the kind of thing rule 4 says to write down rather than
+  quietly "fix". The material page answers "can I use this?", where archived
+  means no. The location view answers "what is physically on this shelf?",
+  where the drum really is there and hiding it would make the app disagree
+  with the warehouse. A plausible resolution is to keep it visible and label
+  it, rather than to filter it. Decide it the first time the discrepancy
+  confuses somebody. Current behavior is pinned by
+  `test_search_by_location_currently_includes_archived_lots`.
+
+- **Aisle search is a substring match, not an anchored prefix.** Also from
+  A5. `search_by_location` builds its pattern as
+  `_like(prefix).rstrip("%") + "%"`, and since `_like` wraps the term in
+  `%…%` the leading wildcard survives — so searching `6L` matches `A6L-99-Z`
+  as well as the 6L aisle. Two smaller consequences ride along: a term ending
+  in a literal `%` has its trailing wildcards stripped in a way that changes
+  what it means, and the `.rstrip("%")` is doing nothing the caller asked for.
+
+  Anchoring it is a one-line change, but it is a behavior change for anyone
+  who has learned to type a fragment, and no real location code currently
+  embeds another aisle's prefix — so the bug is latent rather than felt.
+  Revisit when a location search returns something visibly wrong. Current
+  behavior is pinned by
+  `test_location_search_currently_matches_a_prefix_anywhere_in_the_code`.
