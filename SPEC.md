@@ -340,11 +340,20 @@ before E before D, skipping the Parked section entirely.
 **A task already covered by an open PR is done.** Skip it and take the next
 one. That is what the GitHub query in 7.1 is for.
 
-If the top task is **blocked** — it needs real credentials, a real file, or
-live-sheet access that only a human has — do not skip ahead to a later task.
-Add a Backlog entry naming the task, exactly what is needed, and why, then
-stop for the day. Section 6 and the Backlog exist so that a blocked run
-never invents work to fill the time.
+A task is **blocked** only when it needs something nobody inside a container
+can get: real credentials (a service-account key, `config.local.toml`), real
+files only the user holds, or access to a live Google Sheet.
+
+**Everything else is not blocked.** Writing tests, writing code, generating
+synthetic data, refactoring and documentation are all doable unattended.
+"Looks hard", "needs a decision", and "would be better with the real data"
+are not blockers — the first two are the work, and the third is what the
+synthetic-first principle exists to route around.
+
+When the top task genuinely is blocked, do not skip ahead to a later one.
+Add a Backlog entry naming the task, exactly what is needed from the user,
+and one sentence on why; commit only that SPEC.md change; open a PR titled
+`Note blocked task: <task id>`; Slack it; stop for the day.
 
 ### 7.4 Pick what to branch from
 
@@ -359,21 +368,35 @@ Name the branch for the task: `claude/e2-identifier-strategy`, not a random
 slug. Someone reading the branch list on Monday should be able to tell what
 each one is.
 
-### 7.5 Finish the task
+### 7.5 Do the task, then ship it
 
-1. Implement the smallest change that satisfies the task's stated DoD. Read
-   section 2 (Principles) and section 6 (Out of scope) before writing
-   anything.
-2. **Actually run the verification the DoD asks for** — `python -m pytest`,
+1. Implement the smallest change that satisfies the task's stated DoD, and
+   nothing beyond what the DoD asks for. Read section 2 (Principles) and
+   section 6 (Out of scope) before writing anything.
+2. **Match the code that is already here.** Read a couple of neighbouring
+   files first — `dtf_materials/cleaning.py` and `dtf_materials/etl.py` are
+   the reference. What matters: the `dtf_materials/` package layout,
+   docstrings that explain *why* rather than restate what the code does,
+   pure functions that return `None` or a flag instead of raising, and ETL
+   kept separate from UI.
+3. **Actually run the verification the DoD asks for** — `python -m pytest`,
    the generator, the ETL, the quality report. Never assume it works.
-3. Only once verification passes, check the box, in the **same commit** as
+4. Only once verification passes, check the box, in the **same commit** as
    the change that satisfies it. One task, one commit. Never half-check.
-4. If a task turns out to need splitting, split it into sub-boxes here in
+5. Commit message: a one-line summary, then a short paragraph on **why**.
+   Match the style already in `git log` — these messages explain the problem
+   the change solves, not which lines moved. End with a
+   `Co-Authored-By: Claude <noreply@anthropic.com>` trailer.
+6. Push the branch, then **open a pull request against `master`**. Title is
+   the commit's one-line summary. Body: what the task was, what changed,
+   what verification ran and its actual result, and any judgment call a
+   reviewer would otherwise have to reverse-engineer from the diff.
+7. If a task turns out to need splitting, split it into sub-boxes here in
    that same commit.
-5. If verification fails after a genuine attempt to fix it: **do not commit,
+8. If verification fails after a genuine attempt to fix it: **do not commit,
    push, or open a PR with broken work.** Log it, Slack it, leave the tree
    alone for a human.
-6. Anything tempting that appears mid-task and is not already in this file
+9. Anything tempting that appears mid-task and is not already in this file
    goes to the `## Backlog` section — not into the code.
 
 ### 7.6 The run log
@@ -393,13 +416,25 @@ Two hard limits on that push:
 
 Then send one Slack message: what was done, the PR link, what needs merging.
 One per run, including quiet ones — a silent day is indistinguishable from a
-run that never fired.
+run that never fired. If no Slack tool is available, say so in the run
+summary; that is a missing tool, not a failed run.
 
 ### 7.7 Never commit
 
 `db/*.db`, `data/real/`, `config.local.toml`, service account keys, or any
 real material name, price, supplier, or client. `.gitignore` already blocks
 these; never override it.
+
+### 7.8 When section 5 is finished
+
+If every box in section 5 is checked, touch no code. Write the log entry,
+send one Slack message saying the spec is complete, and stop.
+
+**Do not invent new tasks.** Section 6 is a list of things that look useful
+and are not to be built, and it exists for exactly this moment. A run that
+fills an empty day with unrequested work is worse than a run that does
+nothing, because someone now has to review it and decide whether to throw it
+away.
 
 ## Parked — Phase C (sample requests)
 
