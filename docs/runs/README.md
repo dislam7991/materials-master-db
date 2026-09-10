@@ -2,58 +2,51 @@
 
 One file per day the automation runs: `YYYY-MM-DD.md`.
 
-These are written straight to `master` without review (SPEC.md §7.6), so the
-record lands whether or not anyone reviews a PR that day. That is the point —
-if you have been away since Friday, this folder is where you find out what
-happened without opening five branches.
+These go straight to `master` without review (SPEC.md §7.6), so the record
+lands whether or not anyone reviews a PR that day. If you've been away since
+Friday, this is where you find out what happened.
 
-## Read this before merging a stack
+## Merging a stack
 
-**Merge the oldest open PR first.** Every completed task ticks a box in
-SPEC.md section 5, and when the automation stacks a task on top of an
-unmerged one, the branches share that file. Merging out of order means
-resolving conflicts by hand for no reason.
+**Merge the oldest open PR first.** Every task ticks a box in SPEC.md section
+5, so when the automation stacks a task on an unmerged one, both branches touch
+that file. Out-of-order merges mean resolving conflicts for no reason.
 
-Each entry names its PR's base branch, so the order is always recoverable
-from the log: a PR based on `master` merges whenever, a PR based on another
-`claude/*` branch waits for that one.
+Each entry names its PR's base branch, so the order is recoverable: a PR based
+on `master` merges whenever, one based on another `claude/*` branch waits for
+that branch.
 
-## What is authoritative here, and what isn't
+## This folder is a report, not state
 
-Nothing. This folder is a report, not state.
-
-GitHub holds the truth about what is open, merged, or failing. A run decides
-what to do by querying GitHub and then writes down what it did. If an entry
-disagrees with GitHub — a PR listed open that is actually merged, say — the
-entry is stale and GitHub is right. Never fix the discrepancy by editing
-history here; just note it in the next day's entry.
+GitHub holds the truth about what's open, merged or failing. A run queries
+GitHub, then writes down what it did. If an entry disagrees with GitHub, the
+entry is stale — note it in the next day's entry rather than editing history
+here.
 
 ## Format
 
 ```markdown
 # YYYY-MM-DD
 
-**Outcome:** one line — what a person needs to know if they read nothing else.
+**Outcome:** one line — what to know if you read nothing else.
 
 ## Queue at start of run
 Open automation PRs found on GitHub, oldest first, with CI state.
 
 ## What I did
-Prose. The task taken, or why none was. Verification actually run, with
-its result — not "tests pass" but "86 passed, 1 skipped".
+The task taken, or why none was. Verification actually run, with its result —
+not "tests pass" but "86 passed, 1 skipped".
 
 ## PR opened
-Number, title, branch, and what it was branched from. "None" is a valid
-entry and needs a reason.
+Number, title, branch, and what it was branched from. "None" is valid and
+needs a reason.
 
 ## Judgment calls
-Anything a reviewer would otherwise have to reverse-engineer from the diff.
-Scope cut, an assumption made, a Backlog entry added.
+Anything a reviewer would otherwise reverse-engineer from the diff: a scope
+cut, an assumption, a Backlog entry added.
 
 ## Needs you
-What is blocked on a human, and what exactly you have to supply. "Nothing"
-is a valid entry.
+What's blocked on a human and what exactly to supply. "Nothing" is valid.
 ```
 
-Keep entries short. This is a log, not a report card — if an entry needs more
-than a screen, the detail belongs in the PR description.
+Keep entries short. Detail belongs in the PR description.
