@@ -364,9 +364,12 @@ and one sentence on why; commit only that SPEC.md change; open a PR titled
 Every completed task checks a box in this file, so two branches cut from
 `master` in parallel will collide in section 5. When unsure, stack.
 
-Name the branch for the task: `claude/e2-identifier-strategy`, not a random
-slug. Someone reading the branch list on Monday should be able to tell what
-each one is.
+What you branch *from* is the part that matters. The name matters less: call
+it `claude/e2-identifier-strategy` if you are free to choose, but a scheduled
+session usually starts pinned to a branch name it did not pick. Keep that
+name rather than fighting the harness for it — just make sure the PR title
+and the run log say which task the branch carries, so the branch list is
+still readable on Monday.
 
 ### 7.5 Do the task, then ship it
 
