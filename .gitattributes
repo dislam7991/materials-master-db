@@ -1,0 +1,23 @@
+# Line endings. This repo is edited on Windows and run by CI on Linux, which
+# is where the "LF will be replaced by CRLF" warnings came from: Git for
+# Windows defaults to core.autocrlf=true, so every add rewrote line endings and
+# said so. Pinning the working-tree ending here overrides autocrlf on both
+# machines, so nothing is converted and nothing warns.
+
+# LF everywhere, in the repo and in the working tree. Python, git bash and
+# every editor in use read LF fine on Windows.
+* text=auto eol=lf
+
+# Except the Windows launcher: cmd.exe is the one tool that still wants CRLF.
+*.bat text eol=crlf
+
+# The synthetic sheet is data, not source. `scripts/generate_synthetic_sheet.py`
+# writes it through csv.writer, which emits CRLF on every platform because that
+# is what a spreadsheet export looks like — the file mirrors the real sheet's
+# format, dirtiness included. Left unconverted so the bytes on disk match the
+# bytes in the index: convert it either way and a local generator run, or CI's,
+# would leave `git status` dirty with a whole-file diff.
+data/synthetic/*.csv -text
+
+# Binary, so Git never treats a screenshot as text to convert or diff.
+*.png binary

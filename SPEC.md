@@ -261,10 +261,17 @@ Material Name. Both are documented in `docs/flavor_sample_sheet_layout.md`.
       chart at once. Synthetic by necessity as well as principle: rule 5 of
       section 7 forbids committing a real material name, and a screenshot of
       the real sheet's data is exactly that.*
-- [ ] **D2. Repo hygiene pass**: LICENSE (MIT), `.gitattributes` for line
+- [x] **D2. Repo hygiene pass**: LICENSE (MIT), `.gitattributes` for line
       endings (kills the CRLF warning noise), short CONTRIBUTING note that
       this is a personal portfolio project.
       DoD: files present; `git status` clean on both machines.
+      *`.gitattributes` pins the working-tree ending (`eol=lf`, `*.bat`
+      `eol=crlf`) rather than only declaring what's text: the warnings come
+      from `core.autocrlf` converting on the Windows machine, and only an
+      explicit `eol` overrides it. The synthetic CSV is marked `-text` and
+      keeps its CRLF, because `csv.writer` emits CRLF on every platform —
+      normalize it and every generator run, CI's included, would leave a
+      whole-file diff in `git status`, which is the opposite of the DoD.*
 
 ## 6. Explicitly out of scope (do not build these)
 
