@@ -66,7 +66,9 @@ with `--out` to Markdown; the Streamlit app; pytest for `cleaning.py`,
 Sheets source, confirmed against the real company sheet; the lab sample catalog
 (sheet mapped, table, loader, search tab); a Windows one-click launcher.
 
-**Remaining:** D2 — LICENSE (MIT), `.gitattributes`, a CONTRIBUTING note.
+**Remaining:** nothing in section 5 — every planned task is done. New work
+needs a new task in SPEC.md, not an improvised one; section 6 lists what is
+deliberately out of scope.
 
 **Parked — Phase C (sample-request ingestion).** Parsing the loose Excel
 sample-request files into `samples` / `sample_materials`. Goal 5 of the
@@ -340,3 +342,9 @@ is a display-time join, not a constraint this table should enforce.
 `lab_sample_id` is a surrogate because Sample Code isn't unique — it collided
 22 ways in the first export, and the loader flags those rather than picking a
 winner.
+
+## License
+
+MIT — see [LICENSE](LICENSE). It's a portfolio project rather than a library;
+[CONTRIBUTING.md](CONTRIBUTING.md) says what that means for issues and pull
+requests.
