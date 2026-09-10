@@ -289,9 +289,9 @@ Listed so the daily automation never "helpfully" adds them:
 
 Move section 5 forward by one task, and leave a record of what you did.
 
-This section is the whole instruction set — the scheduled prompt defers to it.
-Changing how the automation behaves means editing this section in a reviewed
-PR, not editing a stored prompt nobody can diff.
+This section is the whole instruction set — the scheduled prompt defers to it,
+so changing the automation means editing this section in a reviewed PR, not a
+stored prompt nobody can diff.
 
 ### 7.1 Check GitHub first
 
@@ -305,104 +305,88 @@ their CI state from GitHub, and decide from that.
 
 Do the **first** of these that applies.
 
-1. **An open automation PR has failing CI or a merge conflict.** Fix it, on
-   that PR's own branch. A PR that can't merge blocks everything stacked
-   behind it. Re-run a job only to confirm a failure naming something the diff
-   never touched — "flake" is not a diagnosis. Never skip, disable or delete a
-   test to get green.
+1. **An open automation PR has failing CI or a merge conflict.** Fix it on that
+   PR's branch — it blocks everything stacked behind it. Re-run a job only to
+   confirm a failure naming something the diff never touched; "flake" is not a
+   diagnosis. Never skip, disable or delete a test to get green.
 2. **Fewer than 3 open automation PRs.** Take the next task (7.3, 7.4).
-3. **3 open automation PRs.** Stop taking new work. Write the log, send the
-   Slack ping, say the queue is full and which PR to merge first.
-
-The cap is 3 because review is the bottleneck here. Stopping on a full queue
-is the correct outcome, not a failure.
+3. **3 open automation PRs.** Stop taking new work. Write the log, Slack, say
+   which PR to merge first. Review is the bottleneck here, so stopping on a
+   full queue is correct, not a failure.
 
 ### 7.3 Pick the task
 
 First unchecked `- [ ]` box in section 5, top to bottom, phase A before B
-before E before D, skipping the Parked section.
-
-**A task already covered by an open PR is done.** Skip it, take the next one.
+before E before D, skipping the Parked section. **A task already covered by an
+open PR is done** — skip it, take the next.
 
 A task is **blocked** only when it needs something nobody in a container can
-get: real credentials, real files only the user holds, or live sheet access.
+get: real credentials, real files only the user holds, live sheet access.
 **Everything else is not blocked** — tests, code, synthetic data, refactoring
 and documentation are all doable unattended. "Looks hard" and "needs a
-decision" are the work, not blockers.
+decision" are the work.
 
 When it genuinely is blocked, don't skip ahead. Add a Backlog entry naming the
-task, what's needed and why; commit only that SPEC.md change; open a PR titled
-`Note blocked task: <task id>`; Slack it; stop.
+task, what's needed and why; commit only that; open a PR titled `Note blocked
+task: <task id>`; Slack it; stop.
 
 ### 7.4 Pick what to branch from
 
-- Task **depends on work in an open PR** → branch from **that PR's branch**,
-  so the stack merges bottom-up.
+- Task **depends on work in an open PR** → branch from **that PR's branch**, so
+  the stack merges bottom-up.
 - Task is **independent** → branch from **`master`**.
 
-Every task ticks a box in this file, so parallel branches cut from `master`
-will collide in section 5. When unsure, stack.
+Every task ticks a box in this file, so parallel branches off `master` collide
+in section 5. When unsure, stack.
 
-What you branch *from* matters; the name doesn't. A scheduled session usually
-starts pinned to a name it didn't pick — keep it, and let the PR title and run
-log say which task it carries.
+What you branch *from* matters; the name doesn't. Keep whatever name the
+session started on, and let the PR title and run log say which task it carries.
 
 ### 7.5 Do the task, then ship it
 
 1. Implement the smallest change satisfying the DoD, and nothing more. Read
    sections 2 and 6 first.
 2. **Match the code already here.** Read `dtf_materials/cleaning.py` and
-   `dtf_materials/etl.py` first: the `dtf_materials/` package layout,
-   docstrings explaining *why* rather than restating the code, pure functions
-   returning `None` or a flag instead of raising, ETL separate from UI.
+   `etl.py` first: the package layout, docstrings explaining *why* rather than
+   restating the code, pure functions returning `None` or a flag instead of
+   raising, ETL separate from UI.
 3. **Actually run the DoD's verification** — pytest, the generator, the ETL,
    the quality report. Never assume it works.
-4. Only once it passes, tick the box in the **same commit** as the change.
-   One task, one commit. Never half-check.
-5. Commit message: one-line summary, then a short paragraph on **why** —
-   match `git log`, which explains the problem solved, not which lines moved.
-   End with `Co-Authored-By: Claude <noreply@anthropic.com>`.
+4. Only once it passes, tick the box in the **same commit** as the change. One
+   task, one commit. Never half-check.
+5. Commit message: one-line summary, then a short paragraph on **why** — match
+   `git log`, which explains the problem solved, not which lines moved. End
+   with `Co-Authored-By: Claude <noreply@anthropic.com>`.
 6. Push, then **open a PR against `master`**. Title is the summary line. Body:
-   the task, what changed, what verification ran and its actual result, and
-   any judgment call a reviewer would otherwise reverse-engineer from the diff.
+   the task, what changed, what verification ran and its actual result, and any
+   judgment call a reviewer would otherwise dig out of the diff.
 7. If the task needs splitting, split it into sub-boxes here in that commit.
 8. If verification fails after a real attempt to fix it: **don't commit, push
    or open a PR with broken work.** Log it, Slack it, leave the tree alone.
-9. Anything tempting that isn't already in this file goes to `## Backlog`, not
-   into the code.
+9. Anything tempting that isn't already in this file goes to `## Backlog`.
 
 ### 7.6 The run log
 
 Every run writes `docs/runs/YYYY-MM-DD.md` in the format in
-`docs/runs/README.md` and pushes it **straight to `master`** — no PR, no
-sign-off, so it lands on days nothing gets reviewed.
+`docs/runs/README.md` and pushes it **straight to `master`** — no PR, so it
+lands on days nothing gets reviewed. Two limits: that push may touch
+**`docs/runs/**` and nothing else**, and `master` moves, so fetch and rebase
+onto `origin/master` immediately before pushing and retry if rejected.
 
-Two limits on that push:
-
-- It may touch **`docs/runs/**` and nothing else.** Code and SPEC changes go
-  through a PR.
-- `master` moves. Fetch and rebase onto `origin/master` immediately before
-  pushing; re-fetch and retry if rejected.
-
-Then send one Slack message: what you did, the PR link, what needs merging.
-Every run, including quiet ones — silence is indistinguishable from a run that
-never fired. No Slack tool available is a missing tool, not a failed run; say
-so in the summary.
+Then Slack once: what you did, the PR link, what needs merging. Every run,
+including quiet ones — silence is indistinguishable from a run that never
+fired. No Slack tool is a missing tool, not a failed run; say so in the summary.
 
 ### 7.7 Never commit
 
-`db/*.db`, `data/real/`, `config.local.toml`, service account keys, or any
-real material name, price, supplier or client. `.gitignore` blocks these;
-never override it.
+`db/*.db`, `data/real/`, `config.local.toml`, service account keys, or any real
+material name, price, supplier or client. `.gitignore` blocks these; never
+override it.
 
 ### 7.8 When section 5 is finished
 
-Touch no code. Write the log, send one Slack message saying the spec is
-complete, stop.
-
-**Do not invent new tasks.** Section 6 exists for exactly this moment — a run
-that fills an empty day with unrequested work leaves someone else to review it
-and decide whether to throw it away.
+Touch no code. Write the log, Slack that the spec is complete, stop. **Do not
+invent new tasks** — section 6 exists for exactly this moment.
 
 ## Parked — Phase C (sample requests)
 
