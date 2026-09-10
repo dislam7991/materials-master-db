@@ -287,16 +287,154 @@ Listed so the daily automation never "helpfully" adds them:
 
 ## 7. Working agreement for the daily automation
 
-1. Pick the **first unchecked box**, top to bottom. One box per day is fine;
-   never more than one phase-B/C box per day.
-2. A box may only be checked in a commit that contains the change satisfying
-   its DoD, with tests passing locally (`python -m pytest`) and in CI.
-3. If a task turns out to need splitting, split it into sub-boxes in this
-   file in the same commit — don't half-check.
-4. Anything tempting that appears mid-task and isn't in this file goes to a
-   `## Backlog` section at the bottom of this file, not into code.
-5. Never commit: `db/*.db`, `data/real/`, `config.local.toml`, service
-   account keys, or any real material name, price, supplier, or client.
+The daily run has one job: move section 5 forward by one task and leave a
+record of what it did.
+
+**This section is the whole instruction set.** The scheduled prompt defers to
+it, so changing how the automation behaves means editing this section in a
+reviewed PR — not editing a stored prompt that nobody else can read, review,
+or diff.
+
+### 7.1 GitHub is the source of truth, not the files in front of you
+
+A run works in a throwaway container cloned from `master`. Unmerged work is
+invisible there: a branch pushed yesterday and a PR opened last week both look
+like they never happened. **Before doing anything, ask GitHub** what branches
+and open PRs exist, whose they are, and what state their CI is in. Decide from
+that answer.
+
+`docs/runs/` is a record written for a human. It is never an input to a
+decision. If the log and GitHub disagree, GitHub is right and the log is
+stale.
+
+This rule exists because the alternative was tried: a run that read only its
+checkout saw every box in section 5 unchecked, could not tell finished work
+from unstarted work, and stopped for the day rather than risk repeating
+itself.
+
+### 7.2 Order of work
+
+Do the **first** of these that applies. Do not skip ahead.
+
+1. **An open automation PR has failing CI, or a merge conflict.** Fix it, on
+   that PR's own branch. This outranks new work every time: a PR that cannot
+   merge blocks everything stacked behind it, and shipping a second feature on
+   top of a broken one just makes a bigger thing to unpick. Re-run a job only
+   to confirm a failure that names something the diff never touched — "flake"
+   is not a diagnosis. Never skip, disable, or delete a test to get green.
+2. **Fewer than 3 open automation PRs.** Take the next task — 7.3 and 7.4.
+3. **3 open automation PRs.** Stop taking new work. Write the log entry, send
+   the Slack ping, and say plainly that the queue is full and which PR to
+   merge first.
+
+The cap is 3 because review is the bottleneck this whole arrangement is built
+around, and a five-deep stack is harder to review than one PR. Work stopping
+is the correct outcome when the queue is full — it is not a failure to
+report as one.
+
+### 7.3 Pick the task
+
+The first unchecked `- [ ]` box in section 5, top to bottom, phase A before B
+before E before D, skipping the Parked section entirely.
+
+**A task already covered by an open PR is done.** Skip it and take the next
+one. That is what the GitHub query in 7.1 is for.
+
+A task is **blocked** only when it needs something nobody inside a container
+can get: real credentials (a service-account key, `config.local.toml`), real
+files only the user holds, or access to a live Google Sheet.
+
+**Everything else is not blocked.** Writing tests, writing code, generating
+synthetic data, refactoring and documentation are all doable unattended.
+"Looks hard", "needs a decision", and "would be better with the real data"
+are not blockers — the first two are the work, and the third is what the
+synthetic-first principle exists to route around.
+
+When the top task genuinely is blocked, do not skip ahead to a later one.
+Add a Backlog entry naming the task, exactly what is needed from the user,
+and one sentence on why; commit only that SPEC.md change; open a PR titled
+`Note blocked task: <task id>`; Slack it; stop for the day.
+
+### 7.4 Pick what to branch from
+
+- The task **depends on work sitting in an open PR** → branch from **that
+  PR's branch**. The stack then merges bottom-up cleanly.
+- The task is **independent** → branch from **`master`**.
+
+Every completed task checks a box in this file, so two branches cut from
+`master` in parallel will collide in section 5. When unsure, stack.
+
+Name the branch for the task: `claude/e2-identifier-strategy`, not a random
+slug. Someone reading the branch list on Monday should be able to tell what
+each one is.
+
+### 7.5 Do the task, then ship it
+
+1. Implement the smallest change that satisfies the task's stated DoD, and
+   nothing beyond what the DoD asks for. Read section 2 (Principles) and
+   section 6 (Out of scope) before writing anything.
+2. **Match the code that is already here.** Read a couple of neighbouring
+   files first — `dtf_materials/cleaning.py` and `dtf_materials/etl.py` are
+   the reference. What matters: the `dtf_materials/` package layout,
+   docstrings that explain *why* rather than restate what the code does,
+   pure functions that return `None` or a flag instead of raising, and ETL
+   kept separate from UI.
+3. **Actually run the verification the DoD asks for** — `python -m pytest`,
+   the generator, the ETL, the quality report. Never assume it works.
+4. Only once verification passes, check the box, in the **same commit** as
+   the change that satisfies it. One task, one commit. Never half-check.
+5. Commit message: a one-line summary, then a short paragraph on **why**.
+   Match the style already in `git log` — these messages explain the problem
+   the change solves, not which lines moved. End with a
+   `Co-Authored-By: Claude <noreply@anthropic.com>` trailer.
+6. Push the branch, then **open a pull request against `master`**. Title is
+   the commit's one-line summary. Body: what the task was, what changed,
+   what verification ran and its actual result, and any judgment call a
+   reviewer would otherwise have to reverse-engineer from the diff.
+7. If a task turns out to need splitting, split it into sub-boxes here in
+   that same commit.
+8. If verification fails after a genuine attempt to fix it: **do not commit,
+   push, or open a PR with broken work.** Log it, Slack it, leave the tree
+   alone for a human.
+9. Anything tempting that appears mid-task and is not already in this file
+   goes to the `## Backlog` section — not into the code.
+
+### 7.6 The run log
+
+Every run writes `docs/runs/YYYY-MM-DD.md`, in the format described in
+`docs/runs/README.md`, and pushes it **directly to `master`**. No PR, no
+sign-off. The log has to land even on days when nothing else gets reviewed —
+that is its entire purpose.
+
+Two hard limits on that push:
+
+- It may touch **`docs/runs/**` and nothing else.** Never bundle a code or
+  SPEC change into a direct-to-master push; those go through a PR like
+  everything else.
+- `master` moves. Fetch and rebase onto `origin/master` immediately before
+  pushing, and re-fetch and retry if the push is rejected.
+
+Then send one Slack message: what was done, the PR link, what needs merging.
+One per run, including quiet ones — a silent day is indistinguishable from a
+run that never fired. If no Slack tool is available, say so in the run
+summary; that is a missing tool, not a failed run.
+
+### 7.7 Never commit
+
+`db/*.db`, `data/real/`, `config.local.toml`, service account keys, or any
+real material name, price, supplier, or client. `.gitignore` already blocks
+these; never override it.
+
+### 7.8 When section 5 is finished
+
+If every box in section 5 is checked, touch no code. Write the log entry,
+send one Slack message saying the spec is complete, and stop.
+
+**Do not invent new tasks.** Section 6 is a list of things that look useful
+and are not to be built, and it exists for exactly this moment. A run that
+fills an empty day with unrequested work is worse than a run that does
+nothing, because someone now has to review it and decide whether to throw it
+away.
 
 ## Parked — Phase C (sample requests)
 
