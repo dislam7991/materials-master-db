@@ -225,6 +225,84 @@ same way the main sheet was.
       field (including the sensory ones that are mostly blank right now —
       shown anyway, since blank means "not recorded yet," not broken).
       DoD: verified in a live browser run against real sample data.
+- [ ] **E5. Combined lookup tab (warehouse + lab).** The two catalogs live in
+      one database but still answer separately, so "do we have this — in the
+      warehouse, in the lab, or both?" is two searches in two tabs, and you
+      have to already know which one to try. A new **Warehouse + Lab** tab
+      answers it from a cold start: one search box over both tables, results
+      labelled `Warehouse` / `Lab` / `Both`, and a summary of whichever sides
+      exist.
+      *Why: it is the reason both sheets are in one database. Until it
+      exists, the lab table is a second silo that merely happens to share a
+      file.*
+
+      **The two existing lookup tabs are not touched.** They stay
+      single-source and keep the deep detail — lot history, price chart,
+      stock reconciliation on one side; vendor and sensory fields on the
+      other. The new tab is the way in, not a replacement: it shows a summary
+      of each side and says which tab holds the rest. Putting cross-source
+      blocks inside the single-source tabs was considered and rejected — it
+      cannot answer the question from a cold start (a lab-only sample has no
+      material row, so searching Material lookup for it finds nothing), and
+      it would put the match rule in two places.
+
+      **Match rule** (already decided in E2, `docs/flavor_sample_sheet_layout.md`
+      §2b — implement it, don't redesign it). A lab sample links to a
+      material by, in order:
+      1. `lab_samples.dtf_part_num` = `materials.dtf_part_num`, both
+         non-blank.
+      2. `lab_samples.sample_code` found as a case-insensitive substring of
+         `materials.material_name` (the real pattern: Sensapure "Mango
+         7182011" contains code `7182011`).
+
+      A linked pair collapses into one `Both` result. Everything else stands
+      alone as `Warehouse` or `Lab` — unlinked is the normal case, not an
+      error. **No fuzzy name matching, ever** (section 6): two vendors'
+      "Vanilla" must never be merged.
+
+      Three rules that keep the match from inventing a link:
+      - **Require `LENGTH(sample_code) >= 4` for rule 2.** A two-character
+        code is a substring of half the warehouse, and a wrong link is
+        fabricated data, which outranks YAGNI here. Real codes are 5-7
+        digits, so this excludes nothing that exists.
+      - **Show every match, never pick one.** A code can sit inside several
+        material names; that is two real materials, so it is two rows.
+      - **Say which rule matched** ("Part #" / "Sample code in name") on a
+        `Both` row, so a surprising link is explainable instead of magic.
+
+      **Deliberately not in this task**, so it stays one sitting:
+      - No new table, no schema change, no link resolution at load time.
+        Match at read time in `queries.py`. Both loaders full-reload, so a
+        stored link would need invalidating on every run to buy nothing at
+        this row count.
+      - No parsing of `location_lab` — show it verbatim. The lab's three
+        location formats have no parser and getting one is its own task
+        (see "Not yet built" below); depending on it would stall this.
+      - No deep detail in the new tab, and no cross-tab navigation
+        machinery. A caption naming the tab to open is enough; Streamlit
+        makes programmatic tab switching more trouble than the problem.
+      - No merging of the two tabs into it, and no third copy of the
+        material stock panel. The combined tab shows Part #, name, stock
+        total and stocked locations comma-joined on the warehouse side, and
+        vendor, code, lab location and declaration type on the lab side.
+        Joining locations is not summing them, so no split-lot caveat can be
+        misread there.
+
+      **Must not break anything:** no existing query, loader, table or tab
+      changes — this is additive. `lab_samples` is empty in a synthetic-only
+      database, which is every CI run, so the tab must degrade to
+      warehouse-only results rather than erroring or looking broken.
+
+      DoD: one search function in `queries.py` returning both sides per row
+      (reusing the existing `get_material` / `get_stocked_locations` /
+      `total_stock` / `get_lab_sample` for the detail, not reimplementing
+      them); the new tab in `app.py`; tests in `tests/test_queries.py`
+      covering a Part # link, a sample-code-in-name link, a warehouse-only
+      hit, a lab-only hit, a code short enough to be rejected by the length
+      guard, and a code matching two materials — built the way that file
+      already builds fixtures (warehouse rows through the real `etl.run()`,
+      lab rows through `load_lab_samples` with `_fetch_values` monkeypatched,
+      as `tests/test_lab_samples.py` does). `python -m pytest` passes whole.
 
 Two distinct identifier questions turned up under "E2," worth naming
 separately so they don't get conflated: (a) what identifies a row *within*
@@ -235,8 +313,8 @@ report, never silent merging; (b) how a lab sample *links to* a warehouse
 first, falling back to Sample Code found as a substring of the warehouse
 Material Name. Both are documented in `docs/flavor_sample_sheet_layout.md`.
 
-**Not yet built**, left for later:
-- The combined warehouse+lab location view using the E2 matching strategy
+**Not yet built**, left for later (the combined location view left this list
+and became E5 above):
 - A lab-specific quality report, or an in-app warnings tab surfacing
   flagged issues (duplicate codes, cross-vendor collisions) the way the
   main inventory's quality report does

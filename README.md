@@ -66,9 +66,9 @@ with `--out` to Markdown; the Streamlit app; pytest for `cleaning.py`,
 Sheets source, confirmed against the real company sheet; the lab sample catalog
 (sheet mapped, table, loader, search tab); a Windows one-click launcher.
 
-**Remaining:** nothing in section 5 — every planned task is done. New work
-needs a new task in SPEC.md, not an improvised one; section 6 lists what is
-deliberately out of scope.
+**Remaining:** E5 — a combined Warehouse + Lab tab: one search across both
+catalogs telling you whether something is in the warehouse, the lab, or both.
+Everything else in section 5 is done.
 
 **Parked — Phase C (sample-request ingestion).** Parsing the loose Excel
 sample-request files into `samples` / `sample_materials`. Goal 5 of the
@@ -78,8 +78,6 @@ clients, not the lab's catalog of vendor samples.
 
 **Known gaps, deliberately not built** (reasoning in SPEC.md):
 
-- No combined warehouse + lab location view. The matching strategy is decided
-  and documented; nothing uses it yet.
 - No lab quality report. The loader flags duplicate sample codes on stdout.
 - No parser for the lab's location codes (`A-2-1`-style, plus plain-English
   ones), and declaration tags whose order varies (`Natural, WONF` vs
