@@ -30,8 +30,9 @@ from typing import Iterator
 
 import pytest
 
-from dtf_materials import etl
+from dtf_materials import etl, lab_samples
 from dtf_materials import queries as q
+from dtf_materials.config import LabSheetConfig
 from dtf_materials.db import connect
 from dtf_materials.sources.base import EXPECTED_HEADERS, InventorySource, RawRow
 
@@ -351,3 +352,180 @@ def test_location_search_currently_matches_a_prefix_anywhere_in_the_code(conn):
 
     assert "A6L-99-Z" in locations
     assert {"6L-27-D", "6L-28-A"} <= locations
+
+
+# --------------------------------------------------------------------------
+# Combined warehouse + lab search (E5)
+# --------------------------------------------------------------------------
+# The link between a lab sample and a warehouse material is inferred at read
+# time from two rules, and an inferred link is exactly the kind of thing that
+# quietly turns into fabricated data: claim one where the sources record
+# none, and the app tells somebody a sample they are holding is already
+# stocked under a Part # that has nothing to do with it. The tests below pin
+# both directions — the links that must be found, and the ones that must not.
+#
+# Warehouse rows go through the real etl.run() as above; lab rows go through
+# the real load_lab_samples() with its Sheets fetch monkeypatched, the way
+# tests/test_lab_samples.py does. Neither side is inserted straight into a
+# table, so no fixture here can describe a database the loaders could not
+# actually produce.
+
+LINK_SHEET_ROWS: list[RawRow] = [
+    # FL-0001: the observed real pattern — the lab's sample code sits inside
+    # the warehouse material's name (Sensapure "Mango 7182011").
+    _material("FL-0001", "Mango 7182011",
+              **{"Receiving Date": "03/15/2025", "DTF Lot #": "L-0001",
+                 "Locations": "6L-27-D", "Current Stock": "20"}),
+
+    # FL-0002: the lab sheet has this one's Part # filled in, so it links on
+    # Part # even though the name carries no code.
+    _material("FL-0002", "Vanilla Extract Natural",
+              **{"Receiving Date": "03/16/2025", "DTF Lot #": "L-0002",
+                 "Locations": "6L-28-A", "Current Stock": "30"}),
+
+    # FL-0003: in the warehouse, unknown to the lab.
+    _material("FL-0003", "Citric Acid Anhydrous",
+              **{"Receiving Date": "03/17/2025", "DTF Lot #": "L-0003",
+                 "Locations": "6R-09-E", "Current Stock": "40"}),
+
+    # FL-0004: a two-character code would be a substring of this name (and of
+    # half the warehouse), which is why the length floor exists.
+    _material("FL-0004", "Beta Alanine 770 Mesh",
+              **{"Receiving Date": "03/18/2025", "DTF Lot #": "L-0004",
+                 "Locations": "6R-10-A", "Current Stock": "50"}),
+
+    # FL-0005 / FL-0006: one code, two real materials. Two links, not a pick.
+    _material("FL-0005", "Lemon 5150 Type A",
+              **{"Receiving Date": "03/19/2025", "DTF Lot #": "L-0005",
+                 "Locations": "6R-11-A", "Current Stock": "10"}),
+    _material("FL-0006", "Lemon 5150 Type B",
+              **{"Receiving Date": "03/20/2025", "DTF Lot #": "L-0006",
+                 "Locations": "6R-11-B", "Current Stock": "10"}),
+]
+
+LAB_ROWS: list[dict[str, str]] = [
+    {"Vendor": "Sensapure", "Flavor Name": "Mango", "Sample Code": "7182011"},
+    {"Vendor": "Prinova", "Flavor Name": "Vanilla Bean",
+     "Sample Code": "60001", "Part # (If applicable)": "FL-0002"},
+    {"Vendor": "Virginia Dare", "Flavor Name": "Pineapple Tropical",
+     "Sample Code": "60002"},
+    {"Vendor": "Prinova", "Flavor Name": "Beta Test Flavor", "Sample Code": "77"},
+    {"Vendor": "Sensapure", "Flavor Name": "Lemon Sherbet", "Sample Code": "5150"},
+]
+
+
+def _lab_values(rows: list[dict[str, str]]) -> list[list[str]]:
+    """The lab sheet as the Sheets API hands it over: header row, then one
+    list of cells per row, blank where the sheet is blank."""
+    header = lab_samples.EXPECTED_LAB_HEADERS
+    return [header] + [[row.get(h, "") for h in header] for row in rows]
+
+
+@pytest.fixture
+def linked_conn(tmp_path, monkeypatch):
+    """Both catalogs in one database, which is the only state the combined
+    search says anything about."""
+    db_path = tmp_path / "test_combined.db"
+    etl.run(ListSource(LINK_SHEET_ROWS), db_path)
+    monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: _lab_values(LAB_ROWS))
+    lab_samples.load_lab_samples(
+        LabSheetConfig(sheet_id="fake", tab_name="fake",
+                       service_account_key_path=tmp_path / "key.json"),
+        db_path,
+    )
+    connection = connect(db_path)
+    yield connection
+    connection.close()
+
+
+def kinds(results) -> list[str]:
+    return [r["kind"] for r in results]
+
+
+def test_a_part_number_links_a_lab_sample_to_its_material(linked_conn):
+    """The strong rule: the lab sheet's own Part # column, filled in.
+
+    Searching the part number has to find one thing, not a warehouse row and
+    a lab row the reader is left to connect themselves.
+    """
+    results = q.search_warehouse_and_lab(linked_conn, "FL-0002")
+
+    assert len(results) == 1
+    assert results[0]["kind"] == "Both"
+    assert results[0]["match_rule"] == "Part #"
+    assert results[0]["material_name"] == "Vanilla Extract Natural"
+    assert results[0]["sample_code"] == "60001"
+
+
+def test_a_sample_code_inside_a_material_name_links(linked_conn):
+    """The fallback rule, and the real-world pattern behind it: the warehouse
+    name "Mango 7182011" carries the lab's code for the same flavor.
+
+    Searching the flavor name finds them as one row from either side — the
+    code never had to be typed.
+    """
+    results = q.search_warehouse_and_lab(linked_conn, "Mango")
+
+    assert len(results) == 1
+    assert results[0]["kind"] == "Both"
+    assert results[0]["match_rule"] == "Sample code in name"
+    assert results[0]["lab_sample_id"] is not None
+    assert results[0]["material_id"] is not None
+
+
+def test_a_material_with_no_lab_sample_comes_back_warehouse_only(linked_conn):
+    """Unlinked is the normal case, not a failure — and the row still has to
+    appear, labelled, rather than being dropped for lacking a lab side."""
+    results = q.search_warehouse_and_lab(linked_conn, "Citric")
+
+    assert kinds(results) == ["Warehouse"]
+    assert results[0]["dtf_part_num"] == "FL-0003"
+    assert results[0]["lab_sample_id"] is None
+
+
+def test_a_lab_sample_with_no_material_comes_back_lab_only(linked_conn):
+    """The case the two single-source tabs cannot answer at all: a sample
+    that was never adopted into inventory has no material row, so searching
+    the warehouse for it finds nothing and explains nothing."""
+    results = q.search_warehouse_and_lab(linked_conn, "Pineapple")
+
+    assert kinds(results) == ["Lab"]
+    assert results[0]["vendor"] == "Virginia Dare"
+    assert results[0]["material_id"] is None
+
+
+def test_a_sample_code_too_short_to_be_meaningful_never_links(linked_conn):
+    """"77" is inside "Beta Alanine 770 Mesh", and inside plenty of other
+    names too. Linking on it would invent a relationship neither sheet
+    records, so the two rows stay two rows.
+    """
+    results = q.search_warehouse_and_lab(linked_conn, "77")
+
+    assert "Both" not in kinds(results)
+    assert sorted(kinds(results)) == ["Lab", "Warehouse"]
+
+
+def test_a_code_matching_two_materials_returns_both_of_them(linked_conn):
+    """One code, two materials that really do both carry it. Picking one
+    would hide a real material; merging them would invent a single one.
+    """
+    results = q.search_warehouse_and_lab(linked_conn, "5150")
+
+    assert kinds(results) == ["Both", "Both"]
+    assert {r["dtf_part_num"] for r in results} == {"FL-0005", "FL-0006"}
+    assert {r["lab_sample_id"] for r in results} == {
+        r["lab_sample_id"] for r in results
+    }  # the same sample on both rows, not two samples
+
+
+def test_combined_search_works_with_no_lab_catalog_loaded(conn):
+    """Every CI run, and any database built from the synthetic sheet alone,
+    has an empty `lab_samples` table — the lab sheet has no synthetic
+    stand-in. The combined search has to degrade to warehouse-only results
+    there rather than erroring or coming back empty.
+    """
+    results = q.search_warehouse_and_lab(conn, "RM-0001")
+
+    assert kinds(results) == ["Warehouse"]
+    assert results[0]["material_name"] == "Split Lot Material"
+    assert q.search_warehouse_and_lab(conn, "") == []

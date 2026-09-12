@@ -96,6 +96,151 @@ def search_lab_samples(conn: sqlite3.Connection, term: str, limit: int = 50) -> 
     ).fetchall()
 
 
+# Rule 2 below matches a sample code found inside a material name. A very
+# short code is a substring of half the warehouse, and a wrong link is
+# fabricated data — which outranks convenience here (SPEC.md section 2). Real
+# codes are 5-7 digits, so this floor excludes nothing that exists.
+MIN_LINKABLE_SAMPLE_CODE_LENGTH = 4
+
+# The two ways a lab sample is allowed to be the same thing as a warehouse
+# material, in priority order, decided in E2 and written up in
+# docs/flavor_sample_sheet_layout.md section 2b. Both loaders store a blank
+# cell as NULL (cleaning.clean_text), so IS NOT NULL is the "has a value"
+# test. Never a fuzzy name match: two vendors' "Vanilla" are two materials.
+_PART_NUM_MATCH = """
+    m.dtf_part_num IS NOT NULL AND ls.dtf_part_num IS NOT NULL
+    AND UPPER(m.dtf_part_num) = UPPER(ls.dtf_part_num)
+"""
+_SAMPLE_CODE_IN_NAME_MATCH = f"""
+    ls.sample_code IS NOT NULL
+    AND LENGTH(ls.sample_code) >= {MIN_LINKABLE_SAMPLE_CODE_LENGTH}
+    AND INSTR(UPPER(m.material_name), UPPER(ls.sample_code)) > 0
+"""
+
+
+def _linked_pairs(
+    conn: sqlite3.Connection,
+    material_ids: list[int],
+    lab_sample_ids: list[int],
+) -> list[sqlite3.Row]:
+    """Every (material, lab sample) link touching one of the given rows.
+
+    Matched at read time rather than resolved at load time and stored: both
+    loaders full-reload, so a stored link would need invalidating on every
+    run to buy nothing at a few hundred rows.
+
+    Both sides are passed in because the question is symmetric — a search
+    that hits a warehouse material must still reveal the lab sample nobody
+    searched for, and vice versa. Every match is returned; picking one would
+    hide a second real material whose name happens to carry the same code.
+    """
+    if not material_ids and not lab_sample_ids:
+        return []
+    material_slots = ",".join("?" * len(material_ids))
+    lab_slots = ",".join("?" * len(lab_sample_ids))
+    return conn.execute(
+        f"""
+        SELECT m.material_id, m.dtf_part_num, m.material_name,
+               ls.lab_sample_id, ls.sample_code, ls.flavor_name, ls.vendor,
+               CASE WHEN {_PART_NUM_MATCH} THEN 'Part #'
+                    ELSE 'Sample code in name' END AS match_rule
+        FROM materials m
+        JOIN lab_samples ls
+          ON ({_PART_NUM_MATCH}) OR ({_SAMPLE_CODE_IN_NAME_MATCH})
+        WHERE m.material_id IN ({material_slots})
+           OR ls.lab_sample_id IN ({lab_slots})
+        ORDER BY m.material_name, ls.flavor_name, ls.lab_sample_id
+        """,
+        (*material_ids, *lab_sample_ids),
+    ).fetchall()
+
+
+def _combined_result(kind: str, material=None, lab=None, match_rule=None) -> dict:
+    """One row of search_warehouse_and_lab, same keys whichever sides exist,
+    so the caller never has to ask which shape it got."""
+    return {
+        "kind": kind,
+        "match_rule": match_rule,
+        "material_id": material["material_id"] if material else None,
+        "dtf_part_num": material["dtf_part_num"] if material else None,
+        "material_name": material["material_name"] if material else None,
+        "lab_sample_id": lab["lab_sample_id"] if lab else None,
+        "sample_code": lab["sample_code"] if lab else None,
+        "flavor_name": lab["flavor_name"] if lab else None,
+        "vendor": lab["vendor"] if lab else None,
+    }
+
+
+def search_warehouse_and_lab(
+    conn: sqlite3.Connection, term: str, limit: int = 50
+) -> list[dict]:
+    """One search over both catalogs: "do we have this — in the warehouse, in
+    the lab, or both?"
+
+    The two catalogs answer separately everywhere else in the app, which only
+    helps someone who already knows which of the two to try. A lab-only
+    sample has no material row at all, so searching the warehouse for it
+    finds nothing and says nothing about why.
+
+    Each result names the side(s) it was found on: `Both` for a linked pair
+    (with `match_rule` saying which rule linked it, so a surprising link is
+    explainable rather than magic), `Warehouse` or `Lab` for a row standing
+    alone. Standing alone is the normal case, not an error — most lab
+    samples have never been adopted into inventory.
+
+    Returns identity and labels only; the per-side detail comes from the
+    existing get_material / get_stocked_locations / total_stock /
+    get_lab_sample, rather than a second implementation of them here.
+
+    `limit` applies to each side's search, so a term matching both catalogs
+    can return more rows than `limit` — and deliberately so when one sample
+    code sits inside several material names.
+    """
+    materials = search_materials(conn, term, limit)
+    lab_samples = search_lab_samples(conn, term, limit)
+    pairs = _linked_pairs(
+        conn,
+        [r["material_id"] for r in materials],
+        [r["lab_sample_id"] for r in lab_samples],
+    )
+
+    by_material: dict[int, list[sqlite3.Row]] = {}
+    by_lab: dict[int, list[sqlite3.Row]] = {}
+    for pair in pairs:
+        by_material.setdefault(pair["material_id"], []).append(pair)
+        by_lab.setdefault(pair["lab_sample_id"], []).append(pair)
+
+    # Warehouse hits first, then lab hits, each in the relevance order its own
+    # search already put them in (exact Part #/Sample Code first).
+    results: list[dict] = []
+    paired: set[tuple[int, int]] = set()
+
+    def add_pair(pair: sqlite3.Row) -> None:
+        key = (pair["material_id"], pair["lab_sample_id"])
+        if key in paired:
+            return
+        paired.add(key)
+        results.append(
+            _combined_result("Both", pair, pair, match_rule=pair["match_rule"])
+        )
+
+    for material in materials:
+        links = by_material.get(material["material_id"], [])
+        if not links:
+            results.append(_combined_result("Warehouse", material=material))
+        for pair in links:
+            add_pair(pair)
+
+    for lab_sample in lab_samples:
+        links = by_lab.get(lab_sample["lab_sample_id"], [])
+        if not links:
+            results.append(_combined_result("Lab", lab=lab_sample))
+        for pair in links:
+            add_pair(pair)
+
+    return results
+
+
 def get_lab_sample(conn: sqlite3.Connection, lab_sample_id: int) -> sqlite3.Row | None:
     return conn.execute(
         "SELECT * FROM lab_samples WHERE lab_sample_id = ?", (lab_sample_id,)
