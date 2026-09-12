@@ -225,7 +225,7 @@ same way the main sheet was.
       field (including the sensory ones that are mostly blank right now —
       shown anyway, since blank means "not recorded yet," not broken).
       DoD: verified in a live browser run against real sample data.
-- [ ] **E5. Combined lookup tab (warehouse + lab).** The two catalogs live in
+- [x] **E5. Combined lookup tab (warehouse + lab).** The two catalogs live in
       one database but still answer separately, so "do we have this — in the
       warehouse, in the lab, or both?" is two searches in two tabs, and you
       have to already know which one to try. A new **Warehouse + Lab** tab

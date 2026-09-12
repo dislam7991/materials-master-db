@@ -64,11 +64,10 @@ Full plan, definitions of done and scope reasoning in [SPEC.md](SPEC.md).
 with `--out` to Markdown; the Streamlit app; pytest for `cleaning.py`,
 `queries.py` and the three ETL load invariants, with CI on every push; the live
 Sheets source, confirmed against the real company sheet; the lab sample catalog
-(sheet mapped, table, loader, search tab); a Windows one-click launcher.
+(sheet mapped, table, loader, search tab); the combined Warehouse + Lab tab,
+one search across both catalogs; a Windows one-click launcher.
 
-**Remaining:** E5 — a combined Warehouse + Lab tab: one search across both
-catalogs telling you whether something is in the warehouse, the lab, or both.
-Everything else in section 5 is done.
+**Remaining:** nothing in section 5 — every task there is done.
 
 **Parked — Phase C (sample-request ingestion).** Parsing the loose Excel
 sample-request files into `samples` / `sample_materials`. Goal 5 of the
@@ -157,9 +156,20 @@ live sheet.
 access — separate so the queries can be tested from a REPL or reused by a
 future CLI without importing Streamlit.
 
-Four tabs: a material by Part # or name; what's at a location (a full code like
-`6L-27-D`, or an aisle prefix like `6L`); everything in a sortable table; the
-lab's samples by vendor, flavor name, sample code or Part #.
+Five tabs: one search across both catalogs, saying whether something is in the
+warehouse, the lab, or both; a material by Part # or name; what's at a location
+(a full code like `6L-27-D`, or an aisle prefix like `6L`); everything in a
+sortable table; the lab's samples by vendor, flavor name, sample code or Part #.
+
+**The combined tab is the way in, not a replacement.** It summarizes whichever
+sides exist and names the tab holding the rest, because the two single-source
+tabs answer different questions in depth and neither can answer "warehouse, lab
+or both?" from a cold start — a lab-only sample has no material row, so
+searching the warehouse for it finds nothing and explains nothing. A lab sample
+links to a material by Part #, or by its sample code appearing in the material's
+name (the real pattern: "Mango 7182011"), with a four-character floor on that
+fallback and every match shown rather than one picked. Never by name similarity:
+two vendors' "Vanilla" are two materials.
 
 **Search is parameterized and wildcard-escaped.** Input never reaches SQL as a
 string fragment, and `%`/`_` match literally — otherwise searching for "Whey
