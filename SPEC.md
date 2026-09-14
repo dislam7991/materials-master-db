@@ -462,6 +462,10 @@ Then Slack once: what you did, the PR link, what needs merging. Every run,
 including quiet ones — silence is indistinguishable from a run that never
 fired. No Slack tool is a missing tool, not a failed run; say so in the summary.
 
+The log and the PR description hold the detail. The terminal summary is three
+bullets in the format `CLAUDE.md` sets out — it is read by a human scrolling
+back, not by anyone who needs the whole run restated.
+
 ### 7.7 Never commit
 
 `db/*.db`, `data/real/`, `config.local.toml`, service account keys, or any real
