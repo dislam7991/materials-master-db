@@ -87,9 +87,87 @@ stat_lots.metric("Lots", f"{summary['lots']:,}")
 stat_suppliers.metric("Supplier Spellings", f"{summary['suppliers']:,}")
 stat_locations.metric("Locations", f"{summary['locations']:,}")
 
-tab_material, tab_location, tab_all, tab_lab = st.tabs(
-    ["Material lookup", "What's in a location", "All materials", "Lab Samples"]
+tab_combined, tab_material, tab_location, tab_all, tab_lab = st.tabs(
+    ["Warehouse + Lab", "Material lookup", "What's in a location",
+     "All materials", "Lab Samples"]
 )
+
+with tab_combined:
+    st.write(
+        "One search over both catalogs, for when you don't yet know which one "
+        "holds the answer: is this in the warehouse, in the lab, or both?"
+    )
+
+    if summary["lab_samples"] == 0:
+        # Not an error state: the lab catalog comes from a different sheet
+        # loaded by a different command, and a synthetic-only database never
+        # has one. Results are still useful, just warehouse-only — say that
+        # rather than letting every row read as "not in the lab".
+        st.caption(
+            "No lab samples are loaded in this database, so every result here "
+            "can only come from the warehouse. See the **Lab Samples** tab."
+        )
+
+    combined_term = st.text_input(
+        "Search by part number, material or flavor name, sample code, or vendor",
+        placeholder="e.g. 15-009, mango, 7182011, sensapure",
+        key="combined",
+    ).strip()
+
+    if not combined_term:
+        st.info("Type anything either catalog might know it by.")
+    else:
+        found = q.search_warehouse_and_lab(conn, combined_term, limit=25)
+        if not found:
+            st.warning(f"Nothing matching “{combined_term}” in the warehouse or the lab.")
+        else:
+            table = []
+            for result in found:
+                # Each side's summary comes from the same queries the
+                # single-source tabs use, so the two can't drift apart.
+                warehouse = {"Stock": None, "Stocked locations": "—"}
+                if result["material_id"] is not None:
+                    stocked = q.get_stocked_locations(conn, result["material_id"])
+                    warehouse = {
+                        "Stock": q.total_stock(conn, result["material_id"]),
+                        # Listed, not summed — this is where the material can
+                        # be found, and no quantity is attached to it here.
+                        "Stocked locations": ", ".join(r["location"] for r in stocked) or "—",
+                    }
+
+                lab = {"Lab location": "—", "Declaration": "—"}
+                if result["lab_sample_id"] is not None:
+                    sample = q.get_lab_sample(conn, result["lab_sample_id"])
+                    lab = {
+                        "Lab location": sample["location_lab"] or "—",
+                        "Declaration": sample["declaration_type"] or "—",
+                    }
+
+                table.append({
+                    "Where": result["kind"],
+                    "Part #": result["dtf_part_num"] or "—",
+                    "Material": result["material_name"] or "—",
+                    **warehouse,
+                    "Vendor": result["vendor"] or "—",
+                    "Flavor": result["flavor_name"] or "—",
+                    "Sample code": result["sample_code"] or "—",
+                    **lab,
+                    "Matched by": result["match_rule"] or "—",
+                })
+
+            st.dataframe(
+                pd.DataFrame(table), hide_index=True, width="stretch",
+                column_config={"Stock": st.column_config.NumberColumn(format="%.2f")},
+            )
+            st.caption(
+                "**Both** means one row linked to the other by Part #, or by its "
+                "sample code appearing in the warehouse material's name — "
+                "“Matched by” says which. Unlinked is normal: most lab samples "
+                "have never been adopted into inventory. This is a summary; the "
+                "**Material lookup** tab has lot history, price over time and "
+                "full stock reconciliation, and the **Lab Samples** tab has the "
+                "vendor and sensory detail."
+            )
 
 with tab_material:
     def _material_options(term: str):
