@@ -160,10 +160,9 @@ it's stale.
 match the existing code (read `cleaning.py` and `etl.py` first); run the
 verification for real (pytest, generator, ETL, report); only then tick the box
 in the **same commit**. Commit message: one-line summary + a short paragraph on
-*why*. The harness appends the `Co-Authored-By` and `Claude-Session` attribution
-itself, so don't hand-add a trailer — a hardcoded one only goes stale as the
-model changes. Push, open a PR against `master`. If verification fails after a
-real fix attempt, don't commit — log it, Slack it, leave the tree alone.
+*why*, ending `Authored-By: Daniel <dislam7991>`. Push, open a PR
+against `master`. If verification fails after a real fix attempt, don't
+commit — log it, Slack it, leave the tree alone.
 
 **Blocked** = only a human can do it (real credentials, real files, live sheet
 access). Everything else — tests, code, synthetic data, refactoring, docs — is
