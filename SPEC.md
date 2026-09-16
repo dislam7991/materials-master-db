@@ -160,7 +160,7 @@ it's stale.
 match the existing code (read `cleaning.py` and `etl.py` first); run the
 verification for real (pytest, generator, ETL, report); only then tick the box
 in the **same commit**. Commit message: one-line summary + a short paragraph on
-*why*, ending `Co-Authored-By: Claude <noreply@anthropic.com>`. Push, open a PR
+*why*, ending `Authored-By: Daniel <dislam7991>`. Push, open a PR
 against `master`. If verification fails after a real fix attempt, don't
 commit — log it, Slack it, leave the tree alone.
 
