@@ -180,6 +180,11 @@ missing tool, not a failed run; say so in the summary.
 **Never commit** `db/*.db`, `data/real/`, `config.local.toml`, service account
 keys, or any real material name, price, supplier or client.
 
+**Nothing outside the checklists is a queue.** Parked Phase C, Direction
+Phase F and the Backlog are held deliberately and carry no `- [ ]` boxes for a
+reason; never promote work out of them. Moving something into a checklist is
+the user's call, in a reviewed PR.
+
 **When the checklists are finished** (every box in section 4 checked, Parked
 skipped): touch no code, write the log, Slack that the spec is complete, stop.
 Do not invent new tasks — section 5 (out of scope) and the Backlog exist for
@@ -206,6 +211,97 @@ usage history is ever wanted. The automation skips this section.
       used it; a "Samples" tab looks up a sample and its materials. Queries in
       `queries.py`, UI in `app.py`.
       DoD: both directions visible against synthetic data.
+
+## Direction — Phase F (formula builder + sample documentation)
+
+**Not scheduled, no `- [ ]` boxes** — the automation skips it like Parked C
+and must not promote it. Written down so the direction survives and the
+questions in front of it are asked once, not rediscovered mid-build.
+
+**The problem.** Finishing a sample means producing three documents by hand —
+a **flavor sheet**, a **sample record sheet**, and **labels** — each an exact
+copy of a company Excel template with autocalculating fields, each uploaded to
+a cloud folder (OneDrive, PD Ops). Almost every value is already in this
+database; the work is transcription, repeated per sample. Target: pick
+materials from the DB into a formula, enter amounts, press one button, get all
+three filled in exactly like the template. **Success is measured in clicks and
+minutes per completed sample** — record the current number before building, or
+there's no way to know it helped.
+
+**Shape.**
+- **One formula, three renderers.** A formula (its (material, amount) lines +
+  batch size + a few header fields) is a first-class DB object; each artifact
+  is one rendering. Build the object first (view, edit, total it); a fourth
+  document later is one renderer, not a redesign.
+- **Fill the template, never regenerate it.** "Copied exactly" is the
+  requirement: copy the `.xlsx`, write into known cells, save as new. Rebuilt
+  layout drifts from the company form the first time someone nudges a border.
+- **Leave the autocalc fields alone** — write inputs, let the sheet's formulas
+  produce outputs; two copies of a trusted calculation is a support call.
+  Consequence: openpyxl doesn't evaluate formulas, so any computed value the
+  *app* must display or print needs Excel/LibreOffice to recalc, or is
+  computed twice on purpose. Decide per field.
+- **Materials are chosen, never typed** — dragged from Warehouse or Lab
+  results, or added by an "Add to formula" button on the row, which pulls
+  every field the DB knows. Both catalogs are pickable (a formula mixes an
+  adopted material with a lab-only sample). A free-text material line would put
+  an unbacked name/price in the DB — fabricated data by another route (§2), and
+  the very transcription this removes. The only authored values: **which rows,
+  how much of each, batch size, and header fields no catalog holds.**
+- **Lines reference rows, never copy them** — a corrected price reaches every
+  formula. This needs ids that survive a reload: `material_id` does (A2 pins
+  it); **`lab_sample_id` does not** — it's a full-reload surrogate precisely
+  because nothing references it, so a formula pointing at a lab sample makes
+  that false and the next load silently repoints it. Stable lab-sample identity
+  is a **prerequisite** of this phase (and §4(a): Sample Code can't be it).
+- **Reference for editing, snapshot at generation** — a flavor sheet already
+  sent out keeps that day's numbers; a reprint must not silently disagree with
+  the copy on someone's desk.
+- **This is the first DB data no loader can rebuild.** So: full-reload loaders
+  must not touch formula tables, `db/*.db` stops being a disposable cache and
+  needs a backup story, and schema changes start needing migrations. The real
+  cost of this phase.
+- **Local files first, sync later.** Artifacts land in a folder the user
+  already syncs; a real OneDrive/SharePoint integration needs M365 credentials
+  and IT — stage it last (like B1–B3), never let it gate the time-saving part.
+- **Synthetic-first still holds** — real templates carry branding and, filled,
+  real names/prices (§6 forbids committing them): they live in `data/real/`
+  (gitignored); committed is a layout map (`docs/`, like E1) + a synthetic
+  template of the same shape for CI.
+
+**Prerequisite, blocks everything.** Copies of the three real templates and a
+reverse-engineering pass on each — which cells are inputs, which formulas,
+which formatting, what the autocalc computes, and which inputs the DB already
+supplies vs. a human types. No code until that map exists (same step E1 was).
+
+**Questions to answer first.**
+1. Which of the three hurts most, and how often? Do that one end-to-end before
+   the others.
+2. What does a sample's documentation cost today, in minutes and clicks? The
+   baseline.
+3. `.xlsx` or `.xlsm`? Macros change everything — openpyxl preserves neither
+   macros nor every chart/image.
+4. Who owns the templates, how often do they change? If revised centrally, the
+   tool loads a new file rather than baking the layout into code.
+5. Percentage-based, weight-based, or both? Does scaling to batch size round to
+   what can actually be weighed?
+6. Which fields come from the DB vs. typed per sample? Decides how much the
+   builder prefills.
+7. Does the sample get a number, assigned by whom — this tool, a person, or an
+   existing log that must stay in sync?
+8. Do labels belong in Excel at all? Label printers usually want PDF or a
+   label format, even though the company's current template is a spreadsheet.
+9. Does anything go back to a sheet/log when a sample is finished? (§5 forbids
+   inventory-sheet write-back; a *sample log* is a different sheet — a
+   question, not a contradiction.)
+10. Does anyone sign off the generated documents, and must a regenerated one be
+    distinguishable from the version already sent?
+
+**Alternatives considered.** Generate from scratch (rejected — exact copy
+required). Excel-side automation, a macro/Power Query reading the SQLite file
+(simpler for the company to own, worth a real look — but untestable here, and
+the builder belongs next to the data). PDF output (right for labels and
+anything not to be edited after; wrong for a workbook recipients expect).
 
 ## Backlog
 
