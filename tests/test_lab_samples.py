@@ -45,6 +45,94 @@ def test_missing_expected_column_raises():
     assert "Sample Code" in str(exc.value)
 
 
+def test_duplicate_expected_header_raises_instead_of_silently_overwriting():
+    """A sheet column mislabeled with a name the loader already relies on
+    used to be invisible: `dict(zip(...))` keeps the rightmost, so a second
+    column headed "Vendor" but filled with lab locations became every row's
+    vendor, with flavor name, sample code and location all still correct —
+    nothing downstream could tell. It now fails loudly, naming the column.
+
+    Written after a "Vendor: A-5-1" (a lab location) turned up on the
+    Warehouse + Lab tab, as the one loader-side explanation for it that
+    leaves every other field intact."""
+    header = VALID_HEADER + ["Vendor "]  # trailing space: normalizes to "Vendor"
+
+    with pytest.raises(lab_samples.LabSheetHeaderError) as exc:
+        list(rows_from_values(
+            [header, _row(Vendor="Flavorchem") + ["A-5-1"]],
+            lab_samples.EXPECTED_LAB_HEADERS,
+            lab_samples.LabSheetHeaderError,
+        ))
+
+    assert "Vendor" in str(exc.value)
+
+
+def test_unnamed_duplicate_columns_are_still_tolerated():
+    """The duplicate check must not reject the sheets that actually exist:
+    both real sheets carry blank trailing header cells (the company
+    inventory sheet has three), which collide on the key "" that nothing
+    reads. Only names the loader relies on are ambiguous."""
+    header = VALID_HEADER + ["", "", ""]
+
+    rows = list(rows_from_values(
+        [header, _row(Vendor="Flavorchem") + ["junk", "junk", "junk"]],
+        lab_samples.EXPECTED_LAB_HEADERS,
+        lab_samples.LabSheetHeaderError,
+    ))
+
+    assert rows[0]["Vendor"] == "Flavorchem"
+
+
+def test_every_source_column_lands_in_its_own_db_column(tmp_path, monkeypatch, config):
+    """One sentinel per source column, end to end, asserting each arrives in
+    the database column it belongs to and no other.
+
+    The INSERT names 22 columns and passes 22 positional values; swap any
+    two of those values and every other test here still passes, because they
+    only ever set two or three fields at once. This is what says a location
+    in the vendor column came from the sheet rather than from the loader."""
+    text_columns = {
+        "Vendor": "vendor",
+        "Flavor Name": "flavor_name",
+        "Sample Code": "sample_code",
+        "Flavor Declaration Type (Natural, N&A, Artificial, WONF)": "declaration_type",
+        "Location (Lab)": "location_lab",
+        "Flavor Family": "flavor_family",
+        "Category/Subcategory": "category_subcategory",
+        "Usage Level (recommended)": "usage_level",
+        "Dry Aroma Descriptors": "dry_aroma_descriptors",
+        "Aroma Intensity 0-5": "aroma_intensity",
+        "Top Note": "top_note",
+        "Mid Palate Character": "mid_palate_character",
+        "Finish Note": "finish_note",
+        "Off Note Tendency": "off_note_tendency",
+        "Matrix Performance": "matrix_performance",
+        "Best Pairings": "best_pairings",
+        "Tested In:": "tested_in",
+        "Allergens": "allergens",
+        "Part # (If applicable)": "dtf_part_num",
+    }
+    # Distinct, recognizable value per column, so a mix-up names both sides.
+    cells = {header: f"<{header}>" for header in text_columns}
+    cells["Date Received"] = "9/1/2021"      # parsed, not stored verbatim
+    cells["Price ($/kg)"] = "$9.03"          # parsed, not stored verbatim
+
+    monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: [VALID_HEADER, _row(**cells)])
+    db_path = tmp_path / "test.db"
+
+    lab_samples.load_lab_samples(config, db_path)
+
+    conn = init_db(db_path)
+    row = conn.execute("SELECT * FROM lab_samples").fetchone()
+    for header, column in text_columns.items():
+        assert row[column] == f"<{header}>", (
+            f"{header!r} landed somewhere other than lab_samples.{column}"
+        )
+    assert row["date_received"] == "2021-09-01"
+    assert row["price_per_kilo"] == 9.03
+    assert row["source_row"] == 2  # header is row 1 — the handle back to the sheet
+
+
 @pytest.fixture
 def config(tmp_path):
     return LabSheetConfig(

@@ -53,6 +53,17 @@ def rows_from_values(
     that) just yields fewer keys; callers already treat a missing key the
     same as a blank cell.
 
+    Also raises if a name in `expected_headers` appears *twice*. The dict
+    built below keeps whichever column comes last, so a duplicated name
+    means the value a caller reads is decided by column order rather than
+    by meaning — and the losing column is silently discarded. That is worse
+    than a missing column, because nothing looks wrong downstream: a
+    mislabeled column titled "Vendor" but filled with lab locations would
+    quietly become every row's vendor. Only *expected* names are checked;
+    real sheets carry several blank and unnamed trailing columns (the
+    company inventory sheet has three), which collide on the key `""` that
+    nothing reads.
+
     Shared by every Sheets-backed source so this logic is written and
     tested exactly once, each caller only supplies its own header list and
     its own exception type."""
@@ -66,6 +77,14 @@ def rows_from_values(
             f"Sheet's header row is missing expected column(s): {missing}. "
             f"Has the sheet's structure changed since the expected headers "
             f"were written?"
+        )
+    duplicated = sorted({h for h in expected_headers if header.count(h) > 1})
+    if duplicated:
+        raise header_error(
+            f"Sheet's header row names the same column more than once: "
+            f"{duplicated}. Only the rightmost of each would be read and the "
+            f"others silently dropped, so which values load would depend on "
+            f"column order. Rename or remove the duplicate column."
         )
     for row in data_rows:
         yield dict(zip(header, row))
