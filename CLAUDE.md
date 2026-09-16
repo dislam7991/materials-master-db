@@ -3,8 +3,8 @@
 Read by every session — scheduled runs, interactive ones, web. Keep it short;
 a long file buries the rules that matter.
 
-Project rules live in `SPEC.md`: section 2 for principles, 6 for what not to
-build, 7 for how the daily automation works. This file covers only how to talk.
+Project rules live in `SPEC.md`: section 2 for principles, 5 for what not to
+build, 6 for how the daily automation works. This file covers only how to talk.
 
 ## Answer format
 
