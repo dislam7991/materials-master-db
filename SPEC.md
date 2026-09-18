@@ -250,10 +250,15 @@ there's no way to know it helped.
   how much of each, batch size, and header fields no catalog holds.**
 - **Lines reference rows, never copy them** — a corrected price reaches every
   formula. This needs ids that survive a reload: `material_id` does (A2 pins
-  it); **`lab_sample_id` does not** — it's a full-reload surrogate precisely
-  because nothing references it, so a formula pointing at a lab sample makes
-  that false and the next load silently repoints it. Stable lab-sample identity
-  is a **prerequisite** of this phase (and §4(a): Sample Code can't be it).
+  it); `lab_sample_id` did not — it was a full-reload surrogate. **Resolved
+  (F0):** lab samples now have a stable, human-maintained `RD-ID`
+  (`RD-000`..`RD-999`) in the lab sheet, and the loader upserts on it instead
+  of full-reloading, so `lab_sample_id` stays put across runs. Identity is a
+  third namespace, not Sample Code (§4(a): collides) and not the Part #
+  (company-owned, not ours to mint); a sample can hold both. See
+  `docs/flavor_sample_sheet_layout.md` §2(a). F2 decides whether a formula line
+  FKs `rd_id` or the now-stable `lab_sample_id` (`rd_id` is the more
+  rebuild-robust handle).
 - **Reference for editing, snapshot at generation** — a flavor sheet already
   sent out keeps that day's numbers; a reprint must not silently disagree with
   the copy on someone's desk.
