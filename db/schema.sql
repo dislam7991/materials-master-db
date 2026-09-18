@@ -133,7 +133,7 @@ CREATE TABLE IF NOT EXISTS sample_materials (
 -- structural relationship this table enforces.
 --
 -- rd_id is the sample's STABLE identity — a human-maintained "RD-ID" column
--- in the lab sheet (format RD-000..RD-999), its own R&D-owned namespace.
+-- in the lab sheet (format RD-0000..RD-9999), its own R&D-owned namespace.
 -- It is neither sample_code (vendor-owned, collides — not unique) nor
 -- dtf_part_num (company-owned, mostly absent, and not ours to mint). The
 -- loader upserts on it (ON CONFLICT(rd_id)), the way the materials ETL
@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS sample_materials (
 -- the Part # an attribute and the warehouse-link key.
 CREATE TABLE IF NOT EXISTS lab_samples (
     lab_sample_id           INTEGER PRIMARY KEY,
-    rd_id                   TEXT UNIQUE,    -- stable R&D identity, RD-000..RD-999
+    rd_id                   TEXT UNIQUE,    -- stable R&D identity, RD-0000..RD-9999
     source_row              INTEGER,        -- 1-based row number in the source sheet
     vendor                  TEXT,
     flavor_name             TEXT,

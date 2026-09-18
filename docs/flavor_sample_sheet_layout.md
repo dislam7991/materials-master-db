@@ -131,7 +131,8 @@ because there is no stable one: Sample Code collides (above) and can't be a
 key; the DTF Part # is company-owned, absent for most samples, and not ours
 to mint. So identity is a **third namespace, owned by R&D**: a
 human-maintained `RD-ID` column in the lab sheet (`Flavor Sample Inventory`
-tab), format `RD-000`..`RD-999`. Every row gets one. The tool only *reads*
+tab), format `RD-0000`..`RD-9999` (4 digits — the catalog is already near
+600, so 3 digits was too tight). Every row gets one. The tool only *reads*
 it — no fabrication, no write-back to the sheet (SPEC §5 intact). The loader
 now **upserts on RD-ID** (`ON CONFLICT(rd_id)`, the same pattern the
 materials ETL uses on `dtf_part_num`), so `lab_sample_id` stays stable for a

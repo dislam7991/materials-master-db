@@ -180,14 +180,14 @@ def test_is_standard_location(raw, expected):
 @pytest.mark.parametrize(
     "raw, expected",
     [
-        ("RD-000", True),
-        ("RD-999", True),
-        ("RD-007", True),
-        (" RD-042 ", True),     # trimmed before matching
-        ("RD-1", False),        # too few digits
-        ("RD-0001", False),     # too many digits
-        ("rd-001", False),      # prefix is case-sensitive
-        ("X-001", False),       # wrong prefix
+        ("RD-0000", True),
+        ("RD-9999", True),
+        ("RD-0007", True),
+        (" RD-0042 ", True),    # trimmed before matching
+        ("RD-001", False),      # too few digits (3)
+        ("RD-00001", False),    # too many digits (5)
+        ("rd-0001", False),     # prefix is case-sensitive
+        ("X-0001", False),      # wrong prefix
         ("RD-", False),
         ("", False),
         (None, False),

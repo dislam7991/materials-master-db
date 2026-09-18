@@ -25,10 +25,11 @@ _LOCATION_CODE = re.compile(r"^[A-Z0-9]+(?:-[A-Z0-9]+)+$")
 # Named locations that are legitimately words rather than codes.
 KNOWN_NAMED_LOCATIONS = {"COOLER"}
 
-# A lab sample's RD-ID: the R&D-owned stable identity, exactly RD- then three
-# digits (RD-000..RD-999). Anchored and case-sensitive on the prefix — a typo'd
-# id must be rejected, not coerced, because it becomes a formula's stable handle.
-_RD_ID = re.compile(r"^RD-\d{3}$")
+# A lab sample's RD-ID: the R&D-owned stable identity, exactly RD- then four
+# digits (RD-0000..RD-9999). Anchored and case-sensitive on the prefix — a
+# typo'd id must be rejected, not coerced, because it becomes a formula's stable
+# handle. Four digits (not three) because the catalog is already near 600.
+_RD_ID = re.compile(r"^RD-\d{4}$")
 
 
 def clean_text(value: str | None) -> str | None:
@@ -156,7 +157,7 @@ def is_standard_location(location: str | None) -> bool:
 
 
 def is_valid_rd_id(value: str | None) -> bool:
-    """True if `value` is a well-formed lab RD-ID (RD-000..RD-999), after
+    """True if `value` is a well-formed lab RD-ID (RD-0000..RD-9999), after
     trimming. Pure and never raises, like the rest of this module — the lab
     loader uses it to skip-and-flag blank or malformed ids rather than let one
     become a phantom stable identity a formula could point at."""

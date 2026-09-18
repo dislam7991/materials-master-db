@@ -227,7 +227,7 @@ def main() -> None:
     if stats.malformed_rd_ids:
         print(
             f"  WARNING: {len(stats.malformed_rd_ids)} row(s) have a malformed "
-            f"RD-ID (expected RD-000..RD-999) and were skipped:"
+            f"RD-ID (expected RD-0000..RD-9999) and were skipped:"
         )
         for source_row, value in sorted(stats.malformed_rd_ids):
             print(f"    row {source_row}: {value!r}")

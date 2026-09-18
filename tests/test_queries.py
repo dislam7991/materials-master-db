@@ -404,13 +404,13 @@ LINK_SHEET_ROWS: list[RawRow] = [
 ]
 
 LAB_ROWS: list[dict[str, str]] = [
-    {"RD-ID": "RD-001", "Vendor": "Sensapure", "Flavor Name": "Mango", "Sample Code": "7182011"},
-    {"RD-ID": "RD-002", "Vendor": "Prinova", "Flavor Name": "Vanilla Bean",
+    {"RD-ID": "RD-0001", "Vendor": "Sensapure", "Flavor Name": "Mango", "Sample Code": "7182011"},
+    {"RD-ID": "RD-0002", "Vendor": "Prinova", "Flavor Name": "Vanilla Bean",
      "Sample Code": "60001", "Part # (If applicable)": "FL-0002"},
-    {"RD-ID": "RD-003", "Vendor": "Virginia Dare", "Flavor Name": "Pineapple Tropical",
+    {"RD-ID": "RD-0003", "Vendor": "Virginia Dare", "Flavor Name": "Pineapple Tropical",
      "Sample Code": "60002"},
-    {"RD-ID": "RD-004", "Vendor": "Prinova", "Flavor Name": "Beta Test Flavor", "Sample Code": "77"},
-    {"RD-ID": "RD-005", "Vendor": "Sensapure", "Flavor Name": "Lemon Sherbet", "Sample Code": "5150"},
+    {"RD-ID": "RD-0004", "Vendor": "Prinova", "Flavor Name": "Beta Test Flavor", "Sample Code": "77"},
+    {"RD-ID": "RD-0005", "Vendor": "Sensapure", "Flavor Name": "Lemon Sherbet", "Sample Code": "5150"},
 ]
 
 
