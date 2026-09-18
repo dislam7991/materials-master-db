@@ -131,8 +131,19 @@ CREATE TABLE IF NOT EXISTS sample_materials (
 -- waiting), and even once filled in, linking sample -> warehouse material
 -- is a display-time join (matched by Part #, see queries.py), not a
 -- structural relationship this table enforces.
+--
+-- rd_id is the sample's STABLE identity — a human-maintained "RD-ID" column
+-- in the lab sheet (format RD-0000..RD-9999), its own R&D-owned namespace.
+-- It is neither sample_code (vendor-owned, collides — not unique) nor
+-- dtf_part_num (company-owned, mostly absent, and not ours to mint). The
+-- loader upserts on it (ON CONFLICT(rd_id)), the way the materials ETL
+-- upserts on dtf_part_num, so lab_sample_id stays stable across reloads and
+-- a Phase F formula line can reference a sample without the next load
+-- repointing it. A sample with a Part # carries both: rd_id is its identity,
+-- the Part # an attribute and the warehouse-link key.
 CREATE TABLE IF NOT EXISTS lab_samples (
     lab_sample_id           INTEGER PRIMARY KEY,
+    rd_id                   TEXT UNIQUE,    -- stable R&D identity, RD-0000..RD-9999
     source_row              INTEGER,        -- 1-based row number in the source sheet
     vendor                  TEXT,
     flavor_name             TEXT,
@@ -161,3 +172,4 @@ CREATE TABLE IF NOT EXISTS lab_samples (
 CREATE INDEX IF NOT EXISTS idx_lab_samples_code ON lab_samples(sample_code);
 CREATE INDEX IF NOT EXISTS idx_lab_samples_name ON lab_samples(flavor_name);
 CREATE INDEX IF NOT EXISTS idx_lab_samples_part_num ON lab_samples(dtf_part_num);
+CREATE INDEX IF NOT EXISTS idx_lab_samples_rd_id ON lab_samples(rd_id);

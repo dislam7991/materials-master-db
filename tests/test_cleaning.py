@@ -19,6 +19,7 @@ import pytest
 from dtf_materials.cleaning import (
     clean_text,
     is_standard_location,
+    is_valid_rd_id,
     normalize_supplier_key,
     parse_bool_flag,
     parse_category,
@@ -174,6 +175,26 @@ def test_split_locations_trailing_separators(raw, expected):
 )
 def test_is_standard_location(raw, expected):
     assert is_standard_location(raw) is expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("RD-0000", True),
+        ("RD-9999", True),
+        ("RD-0007", True),
+        (" RD-0042 ", True),    # trimmed before matching
+        ("RD-001", False),      # too few digits (3)
+        ("RD-00001", False),    # too many digits (5)
+        ("rd-0001", False),     # prefix is case-sensitive
+        ("X-0001", False),      # wrong prefix
+        ("RD-", False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_is_valid_rd_id(raw, expected):
+    assert is_valid_rd_id(raw) is expected
 
 
 # --- supplier keys -------------------------------------------------------

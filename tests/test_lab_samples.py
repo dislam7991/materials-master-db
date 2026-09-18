@@ -87,7 +87,7 @@ def test_every_source_column_lands_in_its_own_db_column(tmp_path, monkeypatch, c
     """One sentinel per source column, end to end, asserting each arrives in
     the database column it belongs to and no other.
 
-    The INSERT names 22 columns and passes 22 positional values; swap any
+    The INSERT names 23 columns and passes 23 positional values; swap any
     two of those values and every other test here still passes, because they
     only ever set two or three fields at once. This is what says a location
     in the vendor column came from the sheet rather than from the loader."""
@@ -116,6 +116,7 @@ def test_every_source_column_lands_in_its_own_db_column(tmp_path, monkeypatch, c
     cells = {header: f"<{header}>" for header in text_columns}
     cells["Date Received"] = "9/1/2021"      # parsed, not stored verbatim
     cells["Price ($/kg)"] = "$9.03"          # parsed, not stored verbatim
+    cells["RD-ID"] = "RD-0001"               # validated, not a free-text sentinel
 
     monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: [VALID_HEADER, _row(**cells)])
     db_path = tmp_path / "test.db"
@@ -128,6 +129,7 @@ def test_every_source_column_lands_in_its_own_db_column(tmp_path, monkeypatch, c
         assert row[column] == f"<{header}>", (
             f"{header!r} landed somewhere other than lab_samples.{column}"
         )
+    assert row["rd_id"] == "RD-0001"
     assert row["date_received"] == "2021-09-01"
     assert row["price_per_kilo"] == 9.03
     assert row["source_row"] == 2  # header is row 1 — the handle back to the sheet
@@ -144,11 +146,12 @@ def test_load_lab_samples_writes_rows_and_flags_duplicate_codes(tmp_path, monkey
     values = [
         VALID_HEADER,
         _row(Vendor="Sensapure", **{
+            "RD-ID": "RD-0001",
             "Flavor Name": "Mango", "Sample Code": "7182011",
             "Price ($/kg)": "$9.03 ", "Date Received": "9/1/2021",
         }),
-        _row(Vendor="Prinova", **{"Flavor Name": "Lime", "Sample Code": "42936"}),
-        _row(Vendor="Virginia Dare", **{"Flavor Name": "Lime", "Sample Code": "42936"}),
+        _row(Vendor="Prinova", **{"RD-ID": "RD-0002", "Flavor Name": "Lime", "Sample Code": "42936"}),
+        _row(Vendor="Virginia Dare", **{"RD-ID": "RD-0003", "Flavor Name": "Lime", "Sample Code": "42936"}),
     ]
     monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: values)
     db_path = tmp_path / "test.db"
@@ -169,16 +172,128 @@ def test_load_lab_samples_writes_rows_and_flags_duplicate_codes(tmp_path, monkey
     assert row["date_received"] == "2021-09-01"
 
 
-def test_load_lab_samples_clears_previous_rows_on_reload(tmp_path, monkeypatch, config):
+def test_reload_upserts_in_place_keeping_lab_sample_id_stable(tmp_path, monkeypatch, config):
+    """The reason this loader upserts on RD-ID instead of full-reloading: a
+    Phase F formula line references a lab sample by an id that must survive a
+    reload. Reorder the rows and edit a field, and each RD-ID must keep its
+    lab_sample_id while the edit lands."""
     db_path = tmp_path / "test.db"
 
-    monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: [VALID_HEADER, _row(**{"Sample Code": "A"})])
+    first = [
+        VALID_HEADER,
+        _row(**{"RD-ID": "RD-0001", "Flavor Name": "Mango"}),
+        _row(**{"RD-ID": "RD-0002", "Flavor Name": "Lime"}),
+    ]
+    monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: first)
     lab_samples.load_lab_samples(config, db_path)
 
-    monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: [VALID_HEADER, _row(**{"Sample Code": "B"})])
-    stats = lab_samples.load_lab_samples(config, db_path)
+    conn = init_db(db_path)
+    ids_before = dict(conn.execute("SELECT rd_id, lab_sample_id FROM lab_samples"))
+
+    # Rows reordered, and RD-0002's flavor name corrected.
+    second = [
+        VALID_HEADER,
+        _row(**{"RD-ID": "RD-0002", "Flavor Name": "Key Lime"}),
+        _row(**{"RD-ID": "RD-0001", "Flavor Name": "Mango"}),
+    ]
+    monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: second)
+    lab_samples.load_lab_samples(config, db_path)
 
     conn = init_db(db_path)
-    codes = [r[0] for r in conn.execute("SELECT sample_code FROM lab_samples")]
-    assert codes == ["B"]
+    ids_after = dict(conn.execute("SELECT rd_id, lab_sample_id FROM lab_samples"))
+    assert ids_after == ids_before  # same identity survived the reorder
+    edited = conn.execute("SELECT flavor_name FROM lab_samples WHERE rd_id = 'RD-0002'").fetchone()
+    assert edited["flavor_name"] == "Key Lime"
+
+
+def test_reload_never_deletes_a_row_dropped_from_the_sheet(tmp_path, monkeypatch, config):
+    """No more DELETE-and-reinsert: a sample removed from the sheet persists,
+    the same never-delete rule materials follow, because a formula may point at
+    it. Load two, reload with only one, both remain."""
+    db_path = tmp_path / "test.db"
+
+    monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: [
+        VALID_HEADER,
+        _row(**{"RD-ID": "RD-0001", "Flavor Name": "Mango"}),
+        _row(**{"RD-ID": "RD-0002", "Flavor Name": "Lime"}),
+    ])
+    lab_samples.load_lab_samples(config, db_path)
+
+    monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: [
+        VALID_HEADER,
+        _row(**{"RD-ID": "RD-0001", "Flavor Name": "Mango"}),
+    ])
+    lab_samples.load_lab_samples(config, db_path)
+
+    conn = init_db(db_path)
+    rd_ids = sorted(r[0] for r in conn.execute("SELECT rd_id FROM lab_samples"))
+    assert rd_ids == ["RD-0001", "RD-0002"]
+
+
+def test_blank_rd_id_row_is_skipped_and_counted(tmp_path, monkeypatch, config):
+    """A row with no RD-ID can't be keyed, so it's skipped and flagged rather
+    than loaded with an invented or null identity."""
+    monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: [
+        VALID_HEADER,
+        _row(**{"RD-ID": "RD-0001", "Flavor Name": "Mango"}),
+        _row(**{"Flavor Name": "Orphan"}),  # no RD-ID
+    ])
+    db_path = tmp_path / "test.db"
+
+    stats = lab_samples.load_lab_samples(config, db_path)
+
     assert stats.staged_rows == 1
+    assert stats.rows_missing_rd_id == 1
+    conn = init_db(db_path)
+    names = [r[0] for r in conn.execute("SELECT flavor_name FROM lab_samples")]
+    assert names == ["Mango"]
+
+
+def test_malformed_rd_id_row_is_skipped_and_flagged(tmp_path, monkeypatch, config):
+    """A typo'd RD-ID must never become a stable handle — skip and flag it,
+    with the source row and the bad value, rather than coerce it."""
+    monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: [
+        VALID_HEADER,
+        _row(**{"RD-ID": "RD-1", "Flavor Name": "Short"}),      # too few digits
+        _row(**{"RD-ID": "X-001", "Flavor Name": "WrongPrefix"}),
+        _row(**{"RD-ID": "RD-0007", "Flavor Name": "Good"}),
+    ])
+    db_path = tmp_path / "test.db"
+
+    stats = lab_samples.load_lab_samples(config, db_path)
+
+    assert stats.staged_rows == 1
+    assert stats.malformed_rd_ids == [(2, "RD-1"), (3, "X-001")]
+    conn = init_db(db_path)
+    rd_ids = [r[0] for r in conn.execute("SELECT rd_id FROM lab_samples")]
+    assert rd_ids == ["RD-0007"]
+
+
+def test_duplicate_rd_id_rows_are_all_skipped_not_merged(tmp_path, monkeypatch, config):
+    """A duplicate RD-ID is a collision on the sample's identity. Because it's
+    the UNIQUE upsert key, letting both through would silently overwrite one
+    sample with the other — so every colliding row is skipped and flagged."""
+    monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: [
+        VALID_HEADER,
+        _row(**{"RD-ID": "RD-0001", "Flavor Name": "Mango"}),
+        _row(**{"RD-ID": "RD-0009", "Flavor Name": "Lime"}),
+        _row(**{"RD-ID": "RD-0009", "Flavor Name": "Lemon"}),
+    ])
+    db_path = tmp_path / "test.db"
+
+    stats = lab_samples.load_lab_samples(config, db_path)
+
+    assert stats.staged_rows == 1
+    assert stats.duplicate_rd_ids == {"RD-0009": [3, 4]}
+    conn = init_db(db_path)
+    rd_ids = [r[0] for r in conn.execute("SELECT rd_id FROM lab_samples")]
+    assert rd_ids == ["RD-0001"]  # RD-0009 loaded neither Lime nor Lemon
+
+
+def test_missing_rd_id_header_raises():
+    header = [h for h in VALID_HEADER if h != "RD-ID"]
+
+    with pytest.raises(lab_samples.LabSheetHeaderError) as exc:
+        list(rows_from_values([header, []], lab_samples.EXPECTED_LAB_HEADERS, lab_samples.LabSheetHeaderError))
+
+    assert "RD-ID" in str(exc.value)

@@ -123,6 +123,25 @@ plain column, never the key. The loader (`dtf_materials/lab_samples.py`)
 flags every sample code seen on more than one row as a warning rather than
 deduplicating, merging, or picking one.
 
+**Resolved for Phase F (F0): the stable identity is `RD-ID`.** Phase F's
+formula builder references a lab sample by an id that must survive a reload,
+and `lab_sample_id` didn't — the loader used to full-reload, reassigning it
+every run. It can't be made stable by upserting on any existing column,
+because there is no stable one: Sample Code collides (above) and can't be a
+key; the DTF Part # is company-owned, absent for most samples, and not ours
+to mint. So identity is a **third namespace, owned by R&D**: a
+human-maintained `RD-ID` column in the lab sheet (`Flavor Sample Inventory`
+tab), format `RD-0000`..`RD-9999` (4 digits — the catalog is already near
+600, so 3 digits was too tight). Every row gets one. The tool only *reads*
+it — no fabrication, no write-back to the sheet (SPEC §5 intact). The loader
+now **upserts on RD-ID** (`ON CONFLICT(rd_id)`, the same pattern the
+materials ETL uses on `dtf_part_num`), so `lab_sample_id` stays stable for a
+given RD-ID across runs, and a row dropped from the sheet persists rather than
+being deleted (a formula may reference it). A sample that has a Part # carries
+both: RD-ID is its identity, the Part # an attribute and the (b) link key.
+Rows with a blank, malformed, or duplicated RD-ID are skipped and flagged —
+never loaded with an invented or colliding identity.
+
 By the most recent real export (467 rows, after the user's cleanup — blank
 rows removed, several collisions manually fixed), 8 sample codes still
 collide. One is a **cross-vendor** collision (Prinova "Lime Key Type" vs.
