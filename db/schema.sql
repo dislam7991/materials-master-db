@@ -173,3 +173,47 @@ CREATE INDEX IF NOT EXISTS idx_lab_samples_code ON lab_samples(sample_code);
 CREATE INDEX IF NOT EXISTS idx_lab_samples_name ON lab_samples(flavor_name);
 CREATE INDEX IF NOT EXISTS idx_lab_samples_part_num ON lab_samples(dtf_part_num);
 CREATE INDEX IF NOT EXISTS idx_lab_samples_rd_id ON lab_samples(rd_id);
+
+-- Phase F: the formula object. A formula is a recipe — a batch of material
+-- amounts plus the header fields no catalog holds (batch size, a name, notes).
+-- Each artifact the builder produces (flavor sheet, sample record, labels) is
+-- one rendering of this one object.
+--
+-- This is the first data in the DB no loader can rebuild: materials and lots
+-- come from the inventory sheet, lab_samples from the lab sheet, but a formula
+-- is authored here and exists nowhere else. Two consequences the loaders must
+-- respect (and tests pin): the full-reload ETL and the lab loader must NEVER
+-- touch these two tables, and db/*.db stops being a disposable cache.
+--
+-- A line REFERENCES a row, it never copies the row's name or price: material_id
+-- for an adopted warehouse material, rd_id for a lab sample (the rebuild-robust
+-- handle — lab_sample_id is a full-reload surrogate, rd_id is the stable R&D
+-- identity; see the lab_samples comment above). A corrected price or renamed
+-- material then reaches every formula that uses it, resolved at read time. A
+-- free-typed material line is deliberately impossible: that would put an
+-- unbacked name/price in the DB — fabricated data by another route (SPEC §2).
+CREATE TABLE IF NOT EXISTS formulas (
+    formula_id   INTEGER PRIMARY KEY,
+    name         TEXT NOT NULL,
+    batch_size   REAL,           -- header field no catalog holds
+    batch_unit   TEXT,
+    notes        TEXT,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS formula_lines (
+    formula_line_id  INTEGER PRIMARY KEY,
+    formula_id       INTEGER NOT NULL REFERENCES formulas(formula_id) ON DELETE CASCADE,
+    material_id      INTEGER REFERENCES materials(material_id),  -- adopted warehouse material
+    rd_id            TEXT REFERENCES lab_samples(rd_id),         -- lab sample, stable handle
+    amount           REAL,
+    unit             TEXT,
+    -- Exactly one reference per line: an adopted material XOR a lab sample.
+    -- Both set, or neither, is a malformed line — reject it at write time
+    -- rather than silently total the wrong price (or none). The two FKs above
+    -- add the other half: an id that doesn't exist is rejected too, so a line
+    -- can only point at a real, resolvable row.
+    CHECK ((material_id IS NULL) <> (rd_id IS NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_formula_lines_formula ON formula_lines(formula_id);

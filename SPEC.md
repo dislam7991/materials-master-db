@@ -128,7 +128,7 @@ implement it, don't redesign it. F0 (stable `RD-ID` for lab samples) is already
 done. The formula object and builder come first and are synthetic-buildable now;
 the renderers wait on the three real templates.
 
-- [ ] **F1. Formula object** — `formulas` + `formula_lines` schema and idempotent
+- [x] **F1. Formula object** — `formulas` + `formula_lines` schema and idempotent
       init. A line *references* a row (`material_id` for adopted materials, the
       stable `rd_id` for lab samples — the rebuild-robust handle), never copies
       its name or price, so a correction reaches every formula. Full-reload
