@@ -76,8 +76,11 @@ lots (full reload)             ◄── lot_locations (parsed codes)
 
 ## 4. Status
 
-**Section 5 is complete** — every task in Phases A, B, E and D is done.
-Phase C (sample requests) is parked. What's built:
+**Phases A, B, E and D are done.** Phase C (sample requests) is parked. Phase F
+(formula builder + sample documentation) was promoted from Direction on
+2026-09-21 at the user's request and is now the active queue — its checklist is
+below the built list, its load-bearing design in the **Phase F design
+reference** section. What's built:
 
 - [x] Schema + idempotent DB init, synthetic dirty-sheet generator
 - [x] ETL: source adapter interface, CSV source, staging, cleaning, atomic load
@@ -117,6 +120,40 @@ Two identifier questions, kept distinct (both in
 never silent merging; (b) how a lab sample *links to* a material — the rule
 above.
 
+### Phase F (formula builder + sample documentation) — active
+
+Promoted from Direction on 2026-09-21 at the user's request. Work top to bottom;
+the load-bearing design is the **Phase F design reference** section below —
+implement it, don't redesign it. F0 (stable `RD-ID` for lab samples) is already
+done. The formula object and builder come first and are synthetic-buildable now;
+the renderers wait on the three real templates.
+
+- [ ] **F1. Formula object** — `formulas` + `formula_lines` schema and idempotent
+      init. A line *references* a row (`material_id` for adopted materials, the
+      stable `rd_id` for lab samples — the rebuild-robust handle), never copies
+      its name or price, so a correction reaches every formula. Full-reload
+      loaders must NOT touch these tables (first DB data no loader can rebuild).
+      DoD: `pytest` covers create/total and reference integrity (a repriced
+      material flows through an existing line); an ETL run leaves formula rows
+      untouched.
+- [ ] **F2. Formula builder UI** — pick materials from Warehouse/Lab results into
+      a formula (never typed), enter amounts + batch size + the header fields no
+      catalog holds, view and total it. Data access in `queries.py`, UI in
+      `app.py`.
+      DoD: a formula built end-to-end against synthetic data with totals shown.
+- [ ] **F3. Reverse-engineer the three real templates** (flavor sheet, sample
+      record sheet, labels) — which cells are inputs, which are formulas, what
+      the autocalc computes, which inputs the DB supplies vs. a human types.
+      Commit a layout map (`docs/`) + a synthetic template of the same shape for
+      CI. **Blocked:** needs copies of the three real templates from the user.
+      DoD: layout map + synthetic templates committed; no real branding or data.
+- [ ] **F4. Renderers** — fill the synthetic template copies from a formula
+      (write inputs only, leave the autocalc fields alone), save as new files
+      locally, and snapshot the formula's numbers at generation so a reprint
+      can't silently disagree with a sent copy. Depends on F3.
+      DoD: all three artifacts generated from one synthetic formula; a
+      regenerated copy is distinguishable from the first.
+
 ## 5. Explicitly out of scope (do not build)
 
 - No Postgres/MySQL — SQLite is correct at this scale (revisit only for
@@ -148,7 +185,7 @@ it's stale.
    (it blocks everything stacked behind it). Never skip, disable or delete a
    test to get green.
 2. Fewer than 3 open automation PRs → take the next unchecked box in the
-   checklists (section 4 Status, then Parked), top to bottom, Phase A→B→E→D,
+   checklists (section 4 Status, then Parked), top to bottom, Phase A→B→E→D→F,
    skipping Parked. A task covered by an open PR is done.
 3. 3 open automation PRs → stop taking work. Write the log, Slack which PR to
    merge first. Review is the bottleneck; stopping on a full queue is correct.
@@ -180,10 +217,10 @@ missing tool, not a failed run; say so in the summary.
 **Never commit** `db/*.db`, `data/real/`, `config.local.toml`, service account
 keys, or any real material name, price, supplier or client.
 
-**Nothing outside the checklists is a queue.** Parked Phase C, Direction
-Phase F and the Backlog are held deliberately and carry no `- [ ]` boxes for a
-reason; never promote work out of them. Moving something into a checklist is
-the user's call, in a reviewed PR.
+**Nothing outside the checklists is a queue.** Parked Phase C and the Backlog
+are held deliberately and carry no `- [ ]` boxes for a reason; never promote
+work out of them. Moving something into a checklist is the user's call, in a
+reviewed PR (as Phase F was on 2026-09-21).
 
 **When the checklists are finished** (every box in section 4 checked, Parked
 skipped): touch no code, write the log, Slack that the spec is complete, stop.
@@ -212,11 +249,13 @@ usage history is ever wanted. The automation skips this section.
       `queries.py`, UI in `app.py`.
       DoD: both directions visible against synthetic data.
 
-## Direction — Phase F (formula builder + sample documentation)
+## Phase F design reference (formula builder + sample documentation)
 
-**Not scheduled, no `- [ ]` boxes** — the automation skips it like Parked C
-and must not promote it. Written down so the direction survives and the
-questions in front of it are asked once, not rediscovered mid-build.
+Promoted into section 4 on 2026-09-21 at the user's request; the checklist
+(F1–F4) lives there, this is the load-bearing design behind it — **implement it,
+don't redesign it** (same status as the Phase E match rule). Written down so the
+direction survives and the questions in front of it are asked once, not
+rediscovered mid-build.
 
 **The problem.** Finishing a sample means producing three documents by hand —
 a **flavor sheet**, a **sample record sheet**, and **labels** — each an exact
@@ -256,9 +295,9 @@ there's no way to know it helped.
   of full-reloading, so `lab_sample_id` stays put across runs. Identity is a
   third namespace, not Sample Code (§4(a): collides) and not the Part #
   (company-owned, not ours to mint); a sample can hold both. See
-  `docs/flavor_sample_sheet_layout.md` §2(a). F2 decides whether a formula line
-  FKs `rd_id` or the now-stable `lab_sample_id` (`rd_id` is the more
-  rebuild-robust handle).
+  `docs/flavor_sample_sheet_layout.md` §2(a). **F1** fixes the formula-line FK:
+  `rd_id` for lab samples (the more rebuild-robust handle) and `material_id` for
+  adopted materials — never a copied name or price.
 - **Reference for editing, snapshot at generation** — a flavor sheet already
   sent out keeps that day's numbers; a reprint must not silently disagree with
   the copy on someone's desk.
@@ -274,10 +313,13 @@ there's no way to know it helped.
   (gitignored); committed is a layout map (`docs/`, like E1) + a synthetic
   template of the same shape for CI.
 
-**Prerequisite, blocks everything.** Copies of the three real templates and a
-reverse-engineering pass on each — which cells are inputs, which formulas,
+**Prerequisite for the renderers (F3 → F4).** Copies of the three real templates
+and a reverse-engineering pass on each — which cells are inputs, which formulas,
 which formatting, what the autocalc computes, and which inputs the DB already
-supplies vs. a human types. No code until that map exists (same step E1 was).
+supplies vs. a human types. The formula object and builder (F1–F2) don't need it
+and come first ("build the object first"); no renderer code until this map
+exists (same step E1 was). F3 is blocked until the user supplies the three real
+templates.
 
 **Questions to answer first.**
 1. Which of the three hurts most, and how often? Do that one end-to-end before
