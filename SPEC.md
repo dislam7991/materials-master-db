@@ -141,6 +141,24 @@ the renderers wait on the three real templates.
       catalog holds, view and total it. Data access in `queries.py`, UI in
       `app.py`.
       DoD: a formula built end-to-end against synthetic data with totals shown.
+      **Superseded 2026-09-22:** the user tried it and it didn't match the daily
+      work. The tab is replaced by F2b; `formulas.py` and its tables stay (F1)
+      until the Sample Record Sheet decides whether it needs them.
+- [x] **F2b. Flavor Sheet, built backwards from the deliverable** (user's call,
+      2026-09-22 — the sheet R&D fills daily, so it goes first). Header
+      (customer, product, quote ID, servings per flavor) + any number of flavor
+      profiles (BASE mg + lines in mg/serving); g/sample derived, never stored.
+      Saved and reopenable; Sample ID suggested as `<prefix><YYMMDD>-NN`,
+      editable. Lines are picked from Warehouse/Lab, **or typed and flagged "not
+      in catalog"** — a deliberate exception to "chosen, never typed", safe here
+      because the sheet carries no price. Renderer fills the real template
+      (`flavor_sheet_xlsx.py`): no line limit (a block grows rows), four flavors
+      a page (extra pages copy the template sheet). Tables:
+      `flavor_sheets`/`flavor_profiles`/`flavor_profile_lines`.
+      DoD: `pytest` covers the object, loader isolation, and the renderer
+      against a synthetic template of the real shape (CI installs openpyxl).
+- [ ] **F2c. Sample Record Sheet** — next deliverable, same approach: work
+      backwards from the template (layout map §1), reuse the flavor profiles.
 - [ ] **F3. Reverse-engineer the three real templates** (flavor sheet, sample
       record sheet, labels) — which cells are inputs, which are formulas, what
       the autocalc computes, which inputs the DB supplies vs. a human types.

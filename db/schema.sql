@@ -217,3 +217,56 @@ CREATE TABLE IF NOT EXISTS formula_lines (
 );
 
 CREATE INDEX IF NOT EXISTS idx_formula_lines_formula ON formula_lines(formula_id);
+
+-- Phase F: the Flavor Sheet — the first deliverable the formula work is built
+-- backwards from (R&D fills one daily). One sheet is a header (customer,
+-- product, quote ID, servings per flavor) plus any number of flavor profiles,
+-- four to a printed page; each profile is a BASE amount plus material lines in
+-- mg per serving. Grams per sample are never stored: they're mg x servings /
+-- 1000, and the generated workbook computes them with the template's own
+-- formula.
+--
+-- Authored data no loader can rebuild, exactly like formulas above: the ETL
+-- and the lab loader must never touch these tables (tests pin it).
+--
+-- A line references its material the same way formula_lines does —
+-- material_id for a warehouse material, rd_id for a lab sample — so a renamed
+-- material reaches every sheet. Unlike formula_lines, a line may instead carry
+-- a typed_name: a material in neither catalog yet. The user chose that on
+-- 2026-09-22 because blocking a daily sheet on a catalog gap makes the tool
+-- unusable; it's safe here because a flavor sheet carries no price, so a typed
+-- name can't fabricate a cost. The UI marks typed lines "not in catalog".
+CREATE TABLE IF NOT EXISTS flavor_sheets (
+    flavor_sheet_id  INTEGER PRIMARY KEY,
+    customer         TEXT,
+    product          TEXT,
+    quote_id         TEXT,
+    servings         REAL,           -- servings made per flavor; drives every gram weight
+    sample_prefix    TEXT,           -- start of the suggested Sample ID, e.g. SMPL
+    created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS flavor_profiles (
+    flavor_profile_id  INTEGER PRIMARY KEY,
+    flavor_sheet_id    INTEGER NOT NULL REFERENCES flavor_sheets(flavor_sheet_id) ON DELETE CASCADE,
+    position           INTEGER NOT NULL,   -- 1-based slot order; 1-4 page one, 5-8 page two, ...
+    flavor_name        TEXT,
+    sample_id          TEXT,
+    base_mg            REAL                -- the BASE row, mg per serving
+);
+
+CREATE TABLE IF NOT EXISTS flavor_profile_lines (
+    flavor_profile_line_id  INTEGER PRIMARY KEY,
+    flavor_profile_id       INTEGER NOT NULL REFERENCES flavor_profiles(flavor_profile_id) ON DELETE CASCADE,
+    position                INTEGER NOT NULL,   -- print order within the profile
+    material_id             INTEGER REFERENCES materials(material_id),
+    rd_id                   TEXT REFERENCES lab_samples(rd_id),
+    typed_name              TEXT,
+    mg_per_serving          REAL,
+    -- Exactly one source per line: a warehouse material, a lab sample, or a
+    -- typed name. Two, or none, is a malformed line.
+    CHECK ((material_id IS NOT NULL) + (rd_id IS NOT NULL) + (typed_name IS NOT NULL) = 1)
+);
+
+CREATE INDEX IF NOT EXISTS idx_flavor_profiles_sheet ON flavor_profiles(flavor_sheet_id);
+CREATE INDEX IF NOT EXISTS idx_flavor_profile_lines_profile ON flavor_profile_lines(flavor_profile_id);

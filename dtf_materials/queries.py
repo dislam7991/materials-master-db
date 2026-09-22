@@ -76,7 +76,7 @@ def search_lab_samples(conn: sqlite3.Connection, term: str, limit: int = 50) -> 
     pattern = _like(term)
     return conn.execute(
         """
-        SELECT lab_sample_id, vendor, flavor_name, sample_code, dtf_part_num,
+        SELECT lab_sample_id, rd_id, vendor, flavor_name, sample_code, dtf_part_num,
                flavor_family, location_lab
         FROM lab_samples
         WHERE vendor LIKE ? ESCAPE '!'
