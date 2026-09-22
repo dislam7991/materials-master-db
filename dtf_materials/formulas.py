@@ -87,6 +87,25 @@ def add_lab_sample_line(
     return cur.lastrowid
 
 
+def list_formulas(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Every formula, newest first, each with its line count — enough to fill a
+    picker in the builder without loading each formula's lines.
+
+    Newest first because the formula you just started is the one you're most
+    likely still editing; the line count lets the picker say "(3 lines)" so an
+    empty draft is distinguishable from a built recipe at a glance."""
+    return conn.execute(
+        """
+        SELECT f.formula_id, f.name, f.batch_size, f.batch_unit, f.notes,
+               f.created_at,
+               (SELECT COUNT(*) FROM formula_lines fl
+                 WHERE fl.formula_id = f.formula_id) AS line_count
+        FROM formulas f
+        ORDER BY f.formula_id DESC
+        """
+    ).fetchall()
+
+
 def get_formula(conn: sqlite3.Connection, formula_id: int) -> sqlite3.Row | None:
     return conn.execute(
         "SELECT * FROM formulas WHERE formula_id = ?", (formula_id,)

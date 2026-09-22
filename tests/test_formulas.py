@@ -169,6 +169,58 @@ def test_line_cannot_reference_a_nonexistent_row(conn):
     conn.rollback()
 
 
+def test_list_formulas_newest_first_with_line_counts(conn):
+    """The builder's picker reads this: newest first (the one just started is
+    the one still being edited), each with its line count so an empty draft is
+    distinguishable from a built recipe."""
+    material_id = _seed_material(conn)
+    first = formulas.create_formula(conn, "First")
+    second = formulas.create_formula(conn, "Second")
+    formulas.add_material_line(conn, second, material_id, amount=2.0)
+
+    listed = formulas.list_formulas(conn)
+    assert [r["name"] for r in listed] == ["Second", "First"]  # newest first
+    by_id = {r["formula_id"]: r for r in listed}
+    assert by_id[second]["line_count"] == 1
+    assert by_id[first]["line_count"] == 0
+
+
+def test_build_a_formula_end_to_end_from_synthetic_materials(tmp_path):
+    """The F2 DoD path, made verifiable without a running Streamlit server: load
+    the synthetic sheet, pick real materials the loader produced, build a formula
+    from them by reference, and read back a total that matches those materials'
+    catalog prices. The builder UI drives exactly these calls (create_formula →
+    add_material_line → formula_total/get_lines); app.py is UI-only and never
+    imported by tests, so this is where the DoD is proven."""
+    db_path = tmp_path / "test.db"
+    etl.run(CsvInventorySource(SYNTHETIC_CSV), db_path)
+    conn = connect(db_path)
+
+    priced = conn.execute(
+        "SELECT material_id, current_price_per_kilo FROM materials "
+        "WHERE current_price_per_kilo IS NOT NULL ORDER BY material_id LIMIT 2"
+    ).fetchall()
+    assert len(priced) == 2  # the synthetic sheet has priced materials to pick
+
+    formula_id = formulas.create_formula(
+        conn, "Synthetic batch", batch_size=10.0, batch_unit="kg"
+    )
+    formulas.add_material_line(conn, formula_id, priced[0]["material_id"], amount=2.0, unit="kg")
+    formulas.add_material_line(conn, formula_id, priced[1]["material_id"], amount=3.0, unit="kg")
+
+    expected = (
+        2.0 * priced[0]["current_price_per_kilo"]
+        + 3.0 * priced[1]["current_price_per_kilo"]
+    )
+    assert formulas.formula_total(conn, formula_id) == pytest.approx(expected)
+
+    lines = formulas.get_lines(conn, formula_id)
+    assert len(lines) == 2
+    assert all(line["name"] for line in lines)  # names resolved from the catalog
+    assert formulas.list_formulas(conn)[0]["formula_id"] == formula_id  # picker sees it
+    conn.close()
+
+
 def test_init_db_is_idempotent_for_formula_tables(tmp_path):
     """Re-running init_db (every ETL run does) must not error on the formula
     tables or wipe them — CREATE TABLE IF NOT EXISTS, same contract as the rest

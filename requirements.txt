@@ -3,3 +3,4 @@
 streamlit>=1.49  # st.dataframe's width="stretch"/"content" needs this; older versions take width as a pixel int
 pandas>=2.0
 streamlit-searchbox>=0.1.15
+openpyxl>=3.1  # fills the Flavor Sheet template (Flavor Sheet tab)

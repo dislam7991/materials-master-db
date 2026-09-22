@@ -2,3 +2,7 @@
 # section 3) — pytest is here so `python -m pytest` works, not because the
 # ETL needs it.
 pytest>=8.0
+# The Flavor Sheet renderer (dtf_materials/flavor_sheet_xlsx.py) fills the
+# company .xlsx template; CI tests it against a synthetic template. Only the
+# renderer imports it — the ETL still runs on the stdlib alone.
+openpyxl>=3.1
