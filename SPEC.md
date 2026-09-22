@@ -136,7 +136,7 @@ the renderers wait on the three real templates.
       DoD: `pytest` covers create/total and reference integrity (a repriced
       material flows through an existing line); an ETL run leaves formula rows
       untouched.
-- [ ] **F2. Formula builder UI** — pick materials from Warehouse/Lab results into
+- [x] **F2. Formula builder UI** — pick materials from Warehouse/Lab results into
       a formula (never typed), enter amounts + batch size + the header fields no
       catalog holds, view and total it. Data access in `queries.py`, UI in
       `app.py`.

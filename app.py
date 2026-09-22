@@ -16,6 +16,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_searchbox import st_searchbox
 
+from dtf_materials import formulas as f
 from dtf_materials import queries as q
 from dtf_materials.db import DEFAULT_DB_PATH
 
@@ -25,10 +26,17 @@ st.set_page_config(page_title="Materials Master", page_icon="~", layout="wide")
 @st.cache_resource
 def get_conn() -> sqlite3.Connection:
     """One connection reused across reruns. check_same_thread=False because
-    Streamlit reruns scripts on its own threads; safe here since the app only
-    ever reads."""
+    Streamlit reruns scripts on its own threads.
+
+    The lookup tabs only read; the Formula builder tab writes through
+    dtf_materials.formulas, which commits its own inserts. That's a single
+    local writer — the same single-writer assumption the project chose SQLite
+    on — so one shared connection is still correct. foreign_keys is ON so a
+    formula line can only reference a material or lab sample that exists (the
+    builder never lets one be typed, but the constraint is the real guarantee)."""
     conn = sqlite3.connect(DEFAULT_DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
@@ -87,9 +95,10 @@ stat_lots.metric("Lots", f"{summary['lots']:,}")
 stat_suppliers.metric("Supplier Spellings", f"{summary['suppliers']:,}")
 stat_locations.metric("Locations", f"{summary['locations']:,}")
 
-tab_combined, tab_material, tab_location, tab_all, tab_lab = st.tabs(
+(tab_combined, tab_material, tab_location, tab_all, tab_lab,
+ tab_formula) = st.tabs(
     ["Warehouse + Lab", "Material lookup", "What's in a location",
-     "All materials", "Lab Samples"]
+     "All materials", "Lab Samples", "Formula builder"]
 )
 
 with tab_combined:
@@ -403,3 +412,189 @@ with tab_lab:
                 pd.DataFrame([{"Field": k, "Value": v or "—"} for k, v in detail_fields.items()]),
                 hide_index=True, width="stretch",
             )
+
+with tab_formula:
+    st.write(
+        "Build a formula by picking materials from the warehouse or lab "
+        "catalogs and entering how much of each. Materials are **chosen, never "
+        "typed** — a free-typed name would put an unbacked price in the "
+        "database. The only authored values are the header (name, batch size), "
+        "which rows, and how much of each. Names and prices are read live from "
+        "the catalog, so a repriced material updates every formula that uses it."
+    )
+
+    # 1. Pick an existing formula or start a new one. The selectbox carries the
+    #    active formula across reruns (each Add reruns the script), so a
+    #    just-created formula stays selected while its lines are added.
+    NEW_FORMULA = "➕ Start a new formula…"
+    saved = f.list_formulas(conn)
+    saved_labels = {
+        row["formula_id"]: (
+            f"{row['name']} — {row['line_count']} "
+            f"line{'s' if row['line_count'] != 1 else ''}"
+        )
+        for row in saved
+    }
+    choice = st.selectbox(
+        "Formula",
+        [NEW_FORMULA] + [row["formula_id"] for row in saved],
+        format_func=lambda c: NEW_FORMULA if c == NEW_FORMULA else saved_labels[c],
+        key="formula_choice",
+    )
+
+    if choice == NEW_FORMULA:
+        with st.form("new_formula"):
+            st.caption(
+                "Header fields — the only free-typed values a formula carries; "
+                "no catalog holds them."
+            )
+            new_name = st.text_input("Formula name", placeholder="e.g. Strawberry Base v2")
+            col_size, col_unit = st.columns(2)
+            new_batch_size = col_size.number_input(
+                "Batch size", min_value=0.0, value=0.0, step=0.1
+            )
+            new_batch_unit = col_unit.text_input("Batch unit", placeholder="e.g. kg")
+            new_notes = st.text_area("Notes", placeholder="Optional")
+            created = st.form_submit_button("Create formula")
+        if created:
+            if not new_name.strip():
+                st.error("A formula needs a name.")
+            else:
+                new_id = f.create_formula(
+                    conn,
+                    new_name.strip(),
+                    # A blank batch stays NULL rather than a fabricated 0 — the
+                    # sheet doesn't record "zero batch", it records nothing yet.
+                    batch_size=new_batch_size or None,
+                    batch_unit=new_batch_unit.strip() or None,
+                    notes=new_notes.strip() or None,
+                )
+                st.session_state["formula_choice"] = new_id
+                st.rerun()
+    else:
+        formula_id = choice
+        formula = f.get_formula(conn, formula_id)
+
+        st.subheader(formula["name"])
+        if formula["batch_size"] is not None:
+            st.caption(f"Batch: {formula['batch_size']:g} {formula['batch_unit'] or ''}".strip())
+        if formula["notes"]:
+            st.caption(formula["notes"])
+
+        # 2. Add a line. The material comes from a catalog search and is picked,
+        #    never typed; only the amount and unit are entered here.
+        st.markdown("#### Add a material")
+        catalog = st.radio(
+            "Catalog", ["Warehouse", "Lab"], horizontal=True, key="formula_catalog"
+        )
+
+        picked = None
+        if catalog == "Warehouse":
+            def _formula_wh_options(term: str):
+                return [
+                    (
+                        f"{r['dtf_part_num'] or '(no part #)'} — {r['material_name']} "
+                        f"({money(r['current_price_per_kilo'])}/kg)",
+                        ("material", r["material_id"]),
+                    )
+                    for r in q.search_materials(conn, term, limit=10)
+                ]
+
+            picked = st_searchbox(
+                _formula_wh_options,
+                label="Search the warehouse by Part # or name",
+                placeholder="e.g. 15-009, caffeine",
+                key="formula_wh_box",
+            )
+        elif summary["lab_samples"] == 0:
+            # Same honest degrade as the other lab-aware tabs: a synthetic-only
+            # database has no lab catalog, so there's nothing to pick there.
+            st.info(
+                "No lab samples are loaded in this database, so only warehouse "
+                "materials can be picked. See the **Lab Samples** tab."
+            )
+        else:
+            def _formula_lab_options(term: str):
+                return [
+                    (
+                        f"{r['sample_code'] or '(no code)'} — "
+                        f"{r['flavor_name'] or '(unnamed)'} "
+                        f"({r['vendor'] or 'unknown vendor'})",
+                        ("lab", r["lab_sample_id"]),
+                    )
+                    for r in q.search_lab_samples(conn, term, limit=10)
+                ]
+
+            picked = st_searchbox(
+                _formula_lab_options,
+                label="Search the lab catalog",
+                placeholder="e.g. 7182011, mango, sensapure",
+                key="formula_lab_box",
+            )
+
+        col_amt, col_u, col_add = st.columns([2, 1, 1])
+        amount = col_amt.number_input(
+            "Amount", min_value=0.0, value=0.0, step=0.1, key="formula_amount"
+        )
+        line_unit = col_u.text_input("Unit", placeholder="e.g. kg", key="formula_unit")
+        col_add.markdown("<div style='height: 1.8em'></div>", unsafe_allow_html=True)
+        add_clicked = col_add.button("Add to formula", disabled=not picked)
+
+        if add_clicked and picked:
+            kind, row_id = picked
+            amt = amount or None  # blank amount stays NULL, not an invented 0
+            unit = line_unit.strip() or None
+            if kind == "material":
+                f.add_material_line(conn, formula_id, row_id, amount=amt, unit=unit)
+                st.rerun()
+            else:
+                sample = q.get_lab_sample(conn, row_id)
+                if not sample["rd_id"]:
+                    # A formula line references a lab sample by its stable RD-ID
+                    # (F1); a sample without one can't be pointed at yet.
+                    st.error(
+                        "This lab sample has no RD-ID, so a formula line can't "
+                        "reference it. Give it a stable RD-ID in the lab sheet first."
+                    )
+                else:
+                    f.add_lab_sample_line(
+                        conn, formula_id, sample["rd_id"], amount=amt, unit=unit
+                    )
+                    st.rerun()
+
+        # 3. View and total. Names and prices are resolved from the catalog by
+        #    get_lines, never stored on the line.
+        st.markdown("#### The formula")
+        lines = f.get_lines(conn, formula_id)
+        if not lines:
+            st.info("No lines yet. Search a catalog above and add a material.")
+        else:
+            st.dataframe(
+                pd.DataFrame([
+                    {
+                        "Source": "Lab" if line["rd_id"] else "Warehouse",
+                        "Material": line["name"] or "—",
+                        "Amount": line["amount"],
+                        "Unit": line["unit"] or "—",
+                        "Price/kg": line["price_per_kilo"],
+                        "Line cost": line["line_cost"],
+                    }
+                    for line in lines
+                ]),
+                hide_index=True, width="stretch",
+                column_config={
+                    "Amount": st.column_config.NumberColumn(format="%.3f"),
+                    "Price/kg": st.column_config.NumberColumn(format="$%.2f"),
+                    "Line cost": st.column_config.NumberColumn(format="$%.2f"),
+                },
+            )
+
+            st.metric("Formula total", money(f.formula_total(conn, formula_id)))
+            uncosted = sum(1 for line in lines if line["price_per_kilo"] is None)
+            if uncosted:
+                subject = "line has" if uncosted == 1 else "lines have"
+                st.caption(
+                    f":warning: {uncosted} {subject} no recorded price and are left "
+                    "out of the total — it's a floor, not the full cost. A missing "
+                    "price is shown blank rather than guessed (SPEC §2)."
+                )
