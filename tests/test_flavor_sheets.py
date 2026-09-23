@@ -164,6 +164,60 @@ def test_the_etl_leaves_flavor_sheets_untouched(tmp_path):
     conn.close()
 
 
+def test_lines_resolve_price_from_each_source_and_a_reprice_flows_through(conn):
+    material_id = _seed_material(conn, "Caffeine")
+    conn.execute(
+        "UPDATE materials SET current_price_per_kilo = 42.5 WHERE material_id = ?", (material_id,)
+    )
+    rd_id = _seed_lab_sample(conn)
+    conn.execute("UPDATE lab_samples SET price_per_kilo = 7.5 WHERE rd_id = ?", (rd_id,))
+    conn.commit()
+    profile = fs.add_profile(conn, fs.create_sheet(conn), "Peach")
+    fs.add_line(conn, profile, material_id=material_id, mg_per_serving=200)
+    fs.add_line(conn, profile, rd_id=rd_id, mg_per_serving=300)
+    fs.add_line(conn, profile, typed_name="Masking", mg_per_serving=100)
+
+    assert [l["price_per_kilo"] for l in fs.get_lines(conn, profile)] == [42.5, 7.5, None]
+
+    # Referenced, not copied: a reprice reaches the existing line.
+    conn.execute(
+        "UPDATE materials SET current_price_per_kilo = 55.0 WHERE material_id = ?", (material_id,)
+    )
+    conn.commit()
+    assert fs.get_lines(conn, profile)[0]["price_per_kilo"] == 55.0
+
+
+def test_profile_cost_sums_priced_lines_and_flags_the_rest(conn):
+    material_id = _seed_material(conn, "Caffeine")
+    conn.execute(
+        "UPDATE materials SET current_price_per_kilo = 50 WHERE material_id = ?", (material_id,)
+    )
+    conn.commit()
+    profile = fs.add_profile(conn, fs.create_sheet(conn, servings=4), "Berry")
+    fs.add_line(conn, profile, material_id=material_id, mg_per_serving=200)  # 200/1e6*50 = 0.01/serving
+    fs.add_line(conn, profile, typed_name="No price", mg_per_serving=100)   # priced? no -> unpriced
+    fs.add_line(conn, profile, typed_name="No amount yet")                  # no mg -> not a missing price
+
+    cost = fs.profile_cost(fs.get_lines(conn, profile), servings=4)
+    assert cost["priced"] == 1 and cost["unpriced"] == 1
+    assert cost["per_serving"] == pytest.approx(0.01)
+    assert cost["per_sample"] == pytest.approx(0.04)
+
+
+def test_profile_cost_is_none_when_nothing_prices(conn):
+    profile = fs.add_profile(conn, fs.create_sheet(conn, servings=4), "Berry")
+    fs.add_line(conn, profile, typed_name="No price", mg_per_serving=100)
+    cost = fs.profile_cost(fs.get_lines(conn, profile), servings=4)
+    assert cost["per_serving"] is None and cost["per_sample"] is None
+    assert cost["priced"] == 0 and cost["unpriced"] == 1
+
+
+def test_cost_helpers():
+    assert fs.line_cost_per_serving(200, 50) == pytest.approx(0.01)
+    assert fs.line_cost_per_serving(None, 50) is None
+    assert fs.line_cost_per_serving(200, None) is None
+
+
 def test_helpers():
     assert fs.product_line({"customer": "Acme", "product": " ", "quote_id": "Q-1"}) == "Acme - Q-1"
     assert fs.suggest_sample_id("SMPL", date(2026, 9, 16), 2) == "SMPL260916-02"

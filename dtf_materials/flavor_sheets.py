@@ -97,6 +97,52 @@ def grams_per_sample(mg_per_serving: float | None, servings: float | None) -> fl
     return mg_per_serving * servings / 1000
 
 
+def line_cost_per_serving(
+    mg_per_serving: float | None, price_per_kilo: float | None
+) -> float | None:
+    """Material cost of one line in one serving: mg is milligrams and price is
+    per kilo (1e6 mg), so cost = mg / 1e6 x price. None when either input is
+    missing — an unpriced or amountless line has no knowable cost, and a rough
+    total must leave it out rather than count it as free."""
+    if mg_per_serving is None or price_per_kilo is None:
+        return None
+    return mg_per_serving / 1_000_000 * price_per_kilo
+
+
+def profile_cost(lines, servings: float | None = None) -> dict:
+    """A rough material cost for a flavor profile, summed from the priced lines
+    only (each line is a Row from get_lines, carrying mg_per_serving and
+    price_per_kilo). Returns per-serving cost, per-sample cost (None until
+    servings is set), the count of lines that priced, and the count left out for
+    want of a price — so the builder can label the figure an estimate and say
+    what it excludes rather than pass off an incomplete number as exact.
+
+    Deliberately partial: a typed line or a catalog row with no price on file
+    drops out. BASE isn't a line here (it carries no material, so no price); it
+    adds weight, not cost. This never fabricates a missing price (SPEC §2) and
+    the generated flavor sheet stays price-free — the estimate lives in the
+    builder alone.
+    """
+    per_serving = 0.0
+    priced = unpriced = 0
+    for line in lines:
+        cost = line_cost_per_serving(line["mg_per_serving"], line["price_per_kilo"])
+        if cost is None:
+            # Only an amountless-but-real line counts as unpriced; a line with no
+            # mg yet has nothing to cost and isn't a missing price.
+            if line["mg_per_serving"] is not None and line["price_per_kilo"] is None:
+                unpriced += 1
+            continue
+        per_serving += cost
+        priced += 1
+    return {
+        "per_serving": per_serving if priced else None,
+        "per_sample": per_serving * servings if priced and servings is not None else None,
+        "priced": priced,
+        "unpriced": unpriced,
+    }
+
+
 # --- flavor profiles -------------------------------------------------------
 
 def get_profiles(conn: sqlite3.Connection, flavor_sheet_id: int) -> list[sqlite3.Row]:
@@ -265,7 +311,18 @@ def get_lines(conn: sqlite3.Connection, flavor_profile_id: int) -> list[sqlite3.
                 WHEN l.rd_id IS NOT NULL THEN
                     TRIM(COALESCE(ls.flavor_name, '') || ' ' || COALESCE(ls.sample_code, ''))
                 ELSE l.typed_name
-            END AS name
+            END AS name,
+            -- Price/kg resolved from the referenced catalog row, like the name:
+            -- a warehouse material's current price or a lab sample's, NULL for a
+            -- typed line (no catalog row backs it) or a catalog row with no price
+            -- on file. Read at render time, never stored, so a reprice flows
+            -- through; the flavor sheet itself stays price-free (SPEC Phase F) —
+            -- this only feeds the builder's rough cost estimate.
+            CASE
+                WHEN l.material_id IS NOT NULL THEN m.current_price_per_kilo
+                WHEN l.rd_id IS NOT NULL THEN ls.price_per_kilo
+                ELSE NULL
+            END AS price_per_kilo
         FROM flavor_profile_lines l
         LEFT JOIN materials m ON m.material_id = l.material_id
         LEFT JOIN lab_samples ls ON ls.rd_id = l.rd_id

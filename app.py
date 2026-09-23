@@ -508,9 +508,15 @@ with tab_flavor:
     def _line_options(term: str):
         """Warehouse and Lab matches, then the typed fallback for a material
         neither catalog has yet (flagged on the line as not in catalog)."""
+        def _price_tag(price) -> str:
+            # Show the price while picking so cost-aware choices happen at the
+            # point of choice; silent when the catalog has no price on file.
+            return f" · {money(price)}/kg" if price is not None else ""
+
         options = [
             (
-                f"Warehouse · {r['dtf_part_num'] or '(no part #)'} — {r['material_name']}",
+                f"Warehouse · {r['dtf_part_num'] or '(no part #)'} — {r['material_name']}"
+                + _price_tag(r["current_price_per_kilo"]),
                 ("material", r["material_id"]),
             )
             for r in q.search_materials(conn, term, limit=8)
@@ -518,7 +524,7 @@ with tab_flavor:
         options += [
             (
                 f"Lab · {r['flavor_name'] or '(unnamed)'} {r['sample_code'] or ''} "
-                f"({r['vendor'] or 'unknown vendor'})",
+                f"({r['vendor'] or 'unknown vendor'})" + _price_tag(r["price_per_kilo"]),
                 ("lab", r["rd_id"]),
             )
             for r in q.search_lab_samples(conn, term, limit=8)
@@ -616,6 +622,8 @@ with tab_flavor:
                         "Source": "Typed — not in catalog" if l["source"] == "Typed" else l["source"],
                         "mg / serving": l["mg_per_serving"],
                         "g / sample": fs.grams_per_sample(l["mg_per_serving"], servings),
+                        "Price / kg": l["price_per_kilo"],
+                        "Cost / serving": fs.line_cost_per_serving(l["mg_per_serving"], l["price_per_kilo"]),
                         "Remove": False,
                     }
                     for l in lines
@@ -624,12 +632,17 @@ with tab_flavor:
                 on_change=_apply_line_edits,
                 args=(editor_key, line_state, version_key),
                 hide_index=True, width="stretch",
-                disabled=["Material", "Source", "g / sample"],
+                disabled=["Material", "Source", "g / sample", "Price / kg", "Cost / serving"],
                 column_config={
                     "#": st.column_config.NumberColumn(width="small", step=1,
                                                        help="Print order — change it to move a line"),
                     "mg / serving": st.column_config.NumberColumn(format="%g", min_value=0.0),
                     "g / sample": st.column_config.NumberColumn(format="%.3f"),
+                    "Price / kg": st.column_config.NumberColumn(
+                        format="$%.2f",
+                        help="From the catalog row this line references — blank if none is on file",
+                    ),
+                    "Cost / serving": st.column_config.NumberColumn(format="$%.4f"),
                     "Remove": st.column_config.CheckboxColumn(width="small", help="Tick to remove the line"),
                 },
             )
@@ -639,6 +652,27 @@ with tab_flavor:
                 "**#** to reorder. Changes save as you make them."
                 + (f" BASE: {base_g:,.3f} g per sample." if base_g is not None else "")
             )
+
+            # A rough material cost for the flavor, summed from the priced lines
+            # only. The generated flavor sheet stays price-free; this estimate
+            # lives in the builder to help judge a formula's cost as it's built.
+            cost = fs.profile_cost(lines, servings)
+            if cost["per_serving"] is not None:
+                estimate = f"**Rough material cost ≈ {money(cost['per_serving'])} / serving**"
+                if cost["per_sample"] is not None:
+                    estimate += f"  ·  {money(cost['per_sample'])} / sample"
+                notes = []
+                if cost["unpriced"]:
+                    notes.append(f"excludes {cost['unpriced']} line(s) with no price on file")
+                if servings is None:
+                    notes.append("set servings per flavor for a per-sample figure")
+                if notes:
+                    estimate += f" — {', '.join(notes)}"
+                st.caption(estimate + ". Estimate only; BASE and unpriced lines are left out.")
+            elif cost["unpriced"]:
+                st.caption(
+                    f"No prices on file for these {cost['unpriced']} material(s) yet, so no cost estimate."
+                )
 
         with st.popover("Remove this flavor"):
             st.write(f"Remove **{_profile_title(profile)}** and its {len(lines)} lines?")
