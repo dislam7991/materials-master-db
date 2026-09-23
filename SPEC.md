@@ -125,8 +125,8 @@ above.
 Promoted from Direction on 2026-09-21 at the user's request. Work top to bottom;
 the load-bearing design is the **Phase F design reference** section below —
 implement it, don't redesign it. F0 (stable `RD-ID` for lab samples) is already
-done. The formula object and builder come first and are synthetic-buildable now;
-the renderers wait on the three real templates.
+done. The three real templates were received 2026-09-21 and are mapped in
+`docs/phase_f_templates_layout.md` (F3).
 
 - [x] **F1. Formula object** — `formulas` + `formula_lines` schema and idempotent
       init. A line *references* a row (`material_id` for adopted materials, the
@@ -159,18 +159,81 @@ the renderers wait on the three real templates.
       against a synthetic template of the real shape (CI installs openpyxl).
 - [x] **F2c. Sample Record Sheet** — next deliverable, same approach: work
       backwards from the template (layout map §1), reuse the flavor profiles.
-- [ ] **F3. Reverse-engineer the three real templates** (flavor sheet, sample
+      Renderer only (`sample_record_xlsx.py`); no UI — F2d–F2g make it usable.
+- [x] **F3. Reverse-engineer the three real templates** (flavor sheet, sample
       record sheet, labels) — which cells are inputs, which are formulas, what
       the autocalc computes, which inputs the DB supplies vs. a human types.
-      Commit a layout map (`docs/`) + a synthetic template of the same shape for
-      CI. Templates received on 9-21-26.
-      DoD: layout map + synthetic templates committed; no real branding or data.
-- [ ] **F4. Renderers** — fill the synthetic template copies from a formula
-      (write inputs only, leave the autocalc fields alone), save as new files
-      locally, and snapshot the formula's numbers at generation so a reprint
-      can't silently disagree with a sent copy. Depends on F3.
-      DoD: all three artifacts generated from one synthetic formula; a
-      regenerated copy is distinguishable from the first.
+      Done 2026-09-21: layout map `docs/phase_f_templates_layout.md` (all
+      three, with template defects as findings); the two spreadsheet shapes
+      are rebuilt synthetically inside `tests/test_flavor_sheets.py` and
+      `tests/test_sample_record.py`, so CI needs no committed template file.
+- [ ] **F4. Labels renderer** (the last of the three; Flavor Sheet = F2b,
+      Sample Record Sheet = F2c). Fill the ten 4"×2" text boxes of the labels
+      template (layout map §3) from a plain data object — Customer, Product,
+      Flavor, Sample ID, serving scoop + weight — no DB access, like F2c.
+      Fill, never regenerate: needs the template saved once as `.docx`
+      (no Python library writes `.doc`). Snapshotting at generation moved to
+      F2h, since it needs saved record sheets.
+      DoD: `pytest` fills a synthetic `.docx` of the real shape; the ETL still
+      imports no docx library. **Blocked until** `Sample Labels Blank.docx`
+      is in `data/real/templates/`.
+- **You, not the automation (2026-09-23):** enlarge the template's "Flavor
+  System and Excipients" section (≈20 rows; extend J49 and F50:H50 to cover
+  them) and restore the formula in F12:F18 (layout map §1, findings 1 and 5).
+  Flavor profile + excipients sometimes exceed 12 lines. Also drop into
+  `data/real/templates/`: one real manager-built record sheet, and one PL Cost
+  Sheet formula table pasted into `pl_cost_paste.txt` (header row included).
+  Open `Sample Labels Blank.doc` in Word and Save As `Sample Labels
+  Blank.docx` alongside it (unblocks F4).
+- [ ] **F2d. Remembered Activity / Overage per material.** Neither is in the
+      source data. Store the last value used per material (Warehouse or Lab
+      row, by id), pre-fill it on the next record sheet, overridable per sheet.
+      Flavor-profile lines default to Activity 1, Overage 0. Never shown as a
+      catalog fact — it's "last used", labelled as such.
+      DoD: `pytest` covers save, pre-fill, per-sheet override, and that a
+      material with no history pre-fills blank (never a guessed number).
+- [ ] **F2e. Sample Record Sheet tab** (user's design, 2026-09-23). Pick a
+      flavor profile → Flavor, Sample code, Product (and Brand when the sheet
+      has a customer) fill from it. Human header fields typed: Scoop size,
+      Servings/Unit, Quote ID, Jar/Lid (the template's two options), Servings
+      (base). Actives and excipients picked from Warehouse/Lab like the Flavor
+      Sheet (label claim mg, Activity/Overage via F2d); Part # and Price/kg
+      always resolved from the DB (`record_line_catalog`), a missing price
+      shown blank and flagged. The profile's flavor lines append after the
+      excipients automatically. Saved and reopenable; a "Download Sample Record
+      Sheet" button renders it. Renderer capacity reads the section size from
+      the template, so the enlarged template needs no code change. A
+      "Download Labels" button renders F4 from the same record. Flag (don't
+      block) when the profile's BASE mg ≠ the actives' label-claim total.
+      DoD: usable in the app end-to-end — a record sheet built from a synthetic
+      flavor profile, saved, reopened and downloaded; `pytest` covers the save
+      tables, the auto-fill, the BASE check and capacity-from-template.
+- [ ] **F2f. Paste actives from the PL Cost Sheet.** A paste box on the F2e
+      tab: user copies a formula table from the Google Sheet (TSV on the
+      clipboard), the app parses Material, Label Claim, Activity, Overage,
+      matches each material to the DB, and shows unmatched rows for the user
+      to resolve by picking (never auto-merged — section 5). A confirmed match
+      is remembered so the same spelling resolves next time. Pasted Activity/
+      Overage feed F2d. No Google API — paste only. Needs
+      `data/real/templates/pl_cost_paste.txt` for the column shape; commit a
+      synthetic fixture of that shape, never the real rows.
+      DoD: usable in the app; `pytest` covers parsing the synthetic paste,
+      matched/unmatched handling, and the remembered match.
+- [ ] **F2g. Import a manager-built record sheet (.xlsx).** Upload on the F2e
+      tab: read header, actives (rows 12–34) and excipients (rows 37–48) into
+      the record, then render fresh from the template — never write into the
+      uploaded file. Part # / Price/kg re-resolved from the DB; Activity and
+      Overage taken from the file (and fed to F2d); rows whose material doesn't
+      match go to the same resolve step as F2f. Needs the real manager sheet in
+      `data/real/templates/` to confirm it follows the template's rows.
+      DoD: usable in the app; `pytest` covers import from a synthetic manager
+      sheet, flavor lines appended after its excipients, and overflow refusal.
+- [ ] **F2h. Snapshot at download** (moved from F4). Each download of a
+      record sheet, flavor sheet or labels stores the numbers it was rendered
+      from (prices included) with a timestamp, so a reprint after a reprice is
+      distinguishable from — and comparable to — the copy that was sent.
+      DoD: `pytest` shows a reprice between two downloads yields two
+      snapshots that differ, and the first is still retrievable.
 
 ### Phase G — Online and multi-user (gated: do not start unprompted)
 
