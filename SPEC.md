@@ -157,7 +157,7 @@ the renderers wait on the three real templates.
       `flavor_sheets`/`flavor_profiles`/`flavor_profile_lines`.
       DoD: `pytest` covers the object, loader isolation, and the renderer
       against a synthetic template of the real shape (CI installs openpyxl).
-- [ ] **F2c. Sample Record Sheet** — next deliverable, same approach: work
+- [x] **F2c. Sample Record Sheet** — next deliverable, same approach: work
       backwards from the template (layout map §1), reuse the flavor profiles.
 - [ ] **F3. Reverse-engineer the three real templates** (flavor sheet, sample
       record sheet, labels) — which cells are inputs, which are formulas, what

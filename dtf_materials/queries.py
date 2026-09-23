@@ -444,6 +444,40 @@ def list_materials(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def record_line_catalog(
+    conn: sqlite3.Connection,
+    *,
+    material_id: int | None = None,
+    rd_id: str | None = None,
+) -> dict:
+    """Part Number and Price/kg for a flavor-profile line, resolved from the row
+    it references — the Sample Record Sheet's two DB columns (layout §1).
+
+    A line references a catalog row, it never copies its Part # or price (SPEC
+    Phase F), so both are looked up here at render time and a repriced material
+    flows straight through. Returns {'part_num', 'price_per_kilo'}, either of
+    which may be None: a lab-only sample has no Part #, and a missing price
+    stays None so the renderer can leave the cell blank rather than write 0.
+
+    A typed line (neither id) carries no Part # or price and gets both None.
+    """
+    if material_id is not None:
+        row = conn.execute(
+            "SELECT dtf_part_num, current_price_per_kilo FROM materials WHERE material_id = ?",
+            (material_id,),
+        ).fetchone()
+    elif rd_id is not None:
+        row = conn.execute(
+            "SELECT dtf_part_num, price_per_kilo FROM lab_samples WHERE rd_id = ?",
+            (rd_id,),
+        ).fetchone()
+    else:
+        row = None
+    if row is None:
+        return {"part_num": None, "price_per_kilo": None}
+    return {"part_num": row[0], "price_per_kilo": row[1]}
+
+
 def database_summary(conn: sqlite3.Connection) -> dict:
     def scalar(sql: str) -> int:
         return conn.execute(sql).fetchone()[0]
