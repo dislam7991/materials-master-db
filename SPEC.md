@@ -163,7 +163,7 @@ the renderers wait on the three real templates.
       record sheet, labels) — which cells are inputs, which are formulas, what
       the autocalc computes, which inputs the DB supplies vs. a human types.
       Commit a layout map (`docs/`) + a synthetic template of the same shape for
-      CI. **Blocked:** needs copies of the three real templates from the user.
+      CI. Templates received on 9-21-26.
       DoD: layout map + synthetic templates committed; no real branding or data.
 - [ ] **F4. Renderers** — fill the synthetic template copies from a formula
       (write inputs only, leave the autocalc fields alone), save as new files
