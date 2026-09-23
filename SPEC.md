@@ -172,19 +172,116 @@ the renderers wait on the three real templates.
       DoD: all three artifacts generated from one synthetic formula; a
       regenerated copy is distinguishable from the first.
 
+### Phase G — Online and multi-user (gated: do not start unprompted)
+
+Today the app is local and read-only. This is the path to several people in the
+company using it from a browser. It is written down so the shape is agreed in
+advance — not so it gets built next. (Written 2026-09-08 as "Phase F"; renamed
+to G when Phase F was reused for the formula builder.)
+
+**The daily automation must not open a box in this phase.** Every task here
+either spends money, puts company data outside the company, or changes who is
+allowed to see prices. Those are human decisions. Treat this section the way
+Parked is treated, until someone explicitly moves a task out of it.
+
+Two assumptions corrected up front, so they are not re-litigated later:
+
+- **Netlify and Vercel cannot host this.** Not a cost limit, an architectural
+  one. They serve static files and short-lived serverless functions; Streamlit
+  is a long-running process holding an open WebSocket to every connected
+  browser. No configuration makes that fit.
+- **Docker is not step one.** It is G6. Streamlit Community Cloud runs an app
+  straight from a GitHub repo with no container at all.
+
+- [ ] **G0. Real sheet access.** Everything below is worthless while the ETL
+      reads a personal copy of the inventory sheet. Multi-user access to stale
+      data is worse than single-user access to stale data, because now other
+      people trust it. Same root problem as **Shared database on a synced
+      drive** in the Backlog, stated larger.
+      DoD: `--source sheets` reads the company's live sheet, not a copy of it.
+
+- [ ] **G1. Read-only deploy to Streamlit Community Cloud.** Free, and no
+      container. Do not upload `db/materials.db`; put the service account key in
+      Streamlit's secrets manager and have the app run the loaders on startup
+      into a throwaway local SQLite. The sheet stays the source of truth, so a
+      disposable filesystem costs nothing.
+      *Blocked on written permission to put real material names, prices and
+      suppliers on a third-party service under a personal account. Ask before,
+      not after. If the answer is no, skip to G6 and host inside the company
+      tenant — a slower start, not a harder one.*
+      DoD: reachable by URL, showing current data; no database file and no key
+      in the repo.
+
+- [ ] **G2. Restrict who can open it.** Streamlit Community Cloud supports
+      private apps with a viewer allowlist by email. Crude — a hand-kept list,
+      not a permission system — but free, ten minutes, and enough for a handful
+      of colleagues. Check the current free-tier limits; they change.
+      DoD: an uninvited account cannot open the app.
+
+- [ ] **G3. Real login, and a users table.** `st.login` / `st.user` (native
+      OIDC, present in the pinned Streamlit) pointed at Microsoft Entra ID,
+      since the company already runs Microsoft 365. People sign in with the work
+      account they already have and no password ever reaches this app. Then a
+      `users` table — email, role, active — checked on every login: an address
+      off the company domain, or absent from the table, gets nothing. This is
+      where "verified in a database" actually happens.
+      *Roles pay for themselves while still read-only. Pricing is usually
+      purchasing's to see, and a role check is what lets everyone else use the
+      tool without it.*
+      DoD: sign-in works with a company account; an unlisted address is refused;
+      price columns hidden from roles without them.
+
+- [ ] **G4. Postgres.** Section 5 says SQLite is right until there are
+      concurrent writers. G5 is exactly that trigger, so this is the spec
+      working as designed rather than being overridden. The schema is plain SQL
+      and was written to port nearly verbatim. Startup rebuilds from the sheet
+      stop here: the database begins holding data of its own.
+      DoD: pipeline, app and tests run against Postgres; SQLite still works for
+      local development.
+
+- [ ] **G5. Write access.** The mechanics are the easy part: roles from G3
+      decide who sees an edit control, and every change writes an audit row —
+      who, what, before, after, when. Never an edit without one.
+      **Settle this before building it, because the hard part is not
+      technical.** Today the sheet is the system of record and this database is
+      a copy. The first edit made in the app creates two systems of record that
+      disagree. Either the app writes back to the sheet and the sheet stays
+      authoritative (section 5 currently forbids that), or the sheet is retired
+      and the app becomes authoritative (not a decision one developer makes
+      alone). There is no third option in which both are true. Most internal
+      tools die precisely here.
+      DoD: the system-of-record decision is written down and agreed *first*;
+      then edits work, are permissioned, and are audited.
+
+- [ ] **G6. Container and real hosting, once the free tier is outgrown.** Now
+      Docker earns its place. Given the company already runs Microsoft 365,
+      Azure App Service is the natural home: data stays in the company tenant,
+      Entra login is native, and IT can own it. Render or Fly.io are cheaper if
+      this stays a personal project.
+      DoD: one command builds the image; the hosted app matches local behavior.
+
 ## 5. Explicitly out of scope (do not build)
 
 - No Postgres/MySQL — SQLite is correct at this scale (revisit only for
-  concurrent writers).
-- No auth, hosting, or Docker — the app runs locally on demand.
-- No write-back to the Google Sheet — one-way ingestion only.
+  concurrent writers). Phase G5 (write access) is the one thing that would
+  create them; G4 is that revisit, and it does not happen on its own.
+- No auth, hosting, or Docker — the app runs locally on demand. Phase G is the
+  written shape of what going online would mean, and it stays gated: having a
+  plan is not permission to execute it. The point of writing it down was to stop
+  the project drifting online one convenient step at a time.
+- No write-back to the Google Sheet — one-way ingestion only. The sheet stays
+  the operational system of record until the company decides otherwise; that is
+  G5's blocking question, and it is an organizational decision rather than a
+  technical one.
 - No incremental/CDC loading — full reload is idempotent and fast at hundreds
   of rows (revisit at ~50k, not before).
 - No auto-merge of fuzzy supplier matches, no auto-resolution of part-#
   conflicts — humans resolve, the report flags.
 - No invented stock splits across locations — the source doesn't record it.
 - No ORM, no web framework beyond Streamlit, no dashboarding suite.
-- No scheduled ETL daemon — run on demand.
+- No scheduled ETL daemon — run on demand. Both G1 (refresh on app startup) and
+  the shared database in the Backlog would revisit this — deliberately, as their
+  own entry, not as a side effect of something else.
 
 ## 6. Working agreement for the daily automation
 
@@ -204,7 +301,7 @@ it's stale.
    test to get green.
 2. Fewer than 3 open automation PRs → take the next unchecked box in the
    checklists (section 4 Status, then Parked), top to bottom, Phase A→B→E→D→F,
-   skipping Parked. A task covered by an open PR is done.
+   skipping Parked and Phase G. A task covered by an open PR is done.
 3. 3 open automation PRs → stop taking work. Write the log, Slack which PR to
    merge first. Review is the bottleneck; stopping on a full queue is correct.
 
