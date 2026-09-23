@@ -25,3 +25,4 @@ venv/
 .vscode/
 .idea/
 Thumbs.db
+.claude/settings.local.json
