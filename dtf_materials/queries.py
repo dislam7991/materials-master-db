@@ -77,7 +77,7 @@ def search_lab_samples(conn: sqlite3.Connection, term: str, limit: int = 50) -> 
     return conn.execute(
         """
         SELECT lab_sample_id, rd_id, vendor, flavor_name, sample_code, dtf_part_num,
-               flavor_family, location_lab
+               flavor_family, location_lab, price_per_kilo
         FROM lab_samples
         WHERE vendor LIKE ? ESCAPE '!'
            OR flavor_name LIKE ? ESCAPE '!'
