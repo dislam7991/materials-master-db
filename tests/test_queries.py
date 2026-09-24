@@ -32,7 +32,7 @@ import pytest
 
 from dtf_materials import etl, lab_samples
 from dtf_materials import queries as q
-from dtf_materials.config import LabSheetConfig
+from dtf_materials.config import SheetConfig
 from dtf_materials.db import connect
 from dtf_materials.sources.base import EXPECTED_HEADERS, InventorySource, RawRow
 
@@ -429,7 +429,7 @@ def linked_conn(tmp_path, monkeypatch):
     etl.run(ListSource(LINK_SHEET_ROWS), db_path)
     monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: _lab_values(LAB_ROWS))
     lab_samples.load_lab_samples(
-        LabSheetConfig(sheet_id="fake", tab_name="fake",
+        SheetConfig(sheet_id="fake", tab_name="fake",
                        service_account_key_path=tmp_path / "key.json"),
         db_path,
     )

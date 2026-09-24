@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Iterator
 
-from ..config import SheetsConfig
+from ..config import SheetConfig
 from .base import EXPECTED_HEADERS, InventorySource, RawRow, rows_from_values
 from .gsheets_common import SheetAccessError, open_worksheet
 
@@ -26,7 +26,7 @@ class SheetHeaderError(Exception):
 
 
 class SheetsInventorySource(InventorySource):
-    def __init__(self, config: SheetsConfig):
+    def __init__(self, config: SheetConfig):
         self.config = config
 
     def rows(self) -> Iterator[RawRow]:

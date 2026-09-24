@@ -16,7 +16,7 @@ import pytest
 from dtf_materials.config import (
     EXAMPLE_CONFIG_PATH,
     ConfigError,
-    SheetsConfig,
+    SheetConfig,
     load_sheets_config,
 )
 
@@ -37,7 +37,7 @@ def write_config(tmp_path, text: str):
 def test_valid_config_returns_typed_values(tmp_path):
     config = load_sheets_config(write_config(tmp_path, VALID))
 
-    assert isinstance(config, SheetsConfig)
+    assert isinstance(config, SheetConfig)
     assert config.sheet_id == "1AbCdEf"
     assert config.tab_name == "Raw Material Inventory"
     # Relative key paths resolve against the config file, not the cwd.
