@@ -111,3 +111,31 @@ def test_cost_caption_asks_for_servings_and_handles_no_prices():
     assert cost_caption(unpriced, servings=30).startswith("No prices on file for these 2")
     empty = {"per_serving": None, "per_sample": None, "priced": 0, "unpriced": 0}
     assert cost_caption(empty, servings=30) is None
+
+
+def test_overlapping_runs_do_not_share_a_connection(db_path):
+    """Streamlit reruns overlap on threads; a connection shared between them returns missing rows."""
+    import threading
+
+    from dtf_materials import queries as q
+    from ui.common import get_conn
+
+    assert get_conn(db_path) is not get_conn(db_path)
+
+    errors: list[str] = []
+
+    def one_run() -> None:
+        """Act like one page run: open its connection, then query repeatedly."""
+        conn = get_conn(db_path)
+        for _ in range(200):
+            try:
+                q.database_summary(conn)
+            except Exception as exc:  # the old shared connection raised TypeError/IndexError here
+                errors.append(repr(exc))
+
+    threads = [threading.Thread(target=one_run) for _ in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
