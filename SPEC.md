@@ -251,11 +251,28 @@ done. The three real templates were received 2026-09-21 and are mapped in
 
 #### Parked in Phase F (user's call, 2026-09-24 — the automation skips these)
 
-Kept, not dropped: the user wants all of these eventually. F2d–F2g were the
-"build the whole sheet in the app" path; F2i does the part that saves the most
-copy-paste first. Activity per material: the
-user will supply data for it later, likely as its own table — that feeds F2d.
+Kept, not dropped: the user wants all of these eventually. F2c2 and F2d–F2g
+were the "build the whole sheet in the app" path; F2i does the part that
+saves the most copy-paste first. Activity per material: the user will supply
+data for it later, likely as its own table — that feeds F2d.
 
+- [ ] **F2c2. Grow the excipient section instead of refusing.** *(Planned
+      in #40, parked the same day: F2i's copy block replaced it, user's
+      call 2026-09-24 — Excel grows the section when the user inserts rows.
+      It only matters again if F2e renders whole sheets.)* Flavor
+      profile + excipients sometimes exceed the 12 rows (37–48). The renderer
+      inserts the extra rows below row 48, and everything under them moves
+      down intact: the merged "Inactive Ingredient Cost" subtotal row and the
+      totals row, their `SUM` ranges extended over the new rows, every
+      reference to a moved cell (`$F$50` in column H, `J49`/`J50` in the cost
+      panel), merged ranges, banding and the print area. New rows copy row
+      48's formulas and styles. openpyxl's `insert_rows` shifts none of this,
+      so the renderer rewrites it — anything it can't move correctly is a
+      refusal, never a silently wrong total. Actives keep their fixed 23 rows.
+      DoD: `pytest` renders 15 excipient lines into the synthetic template and
+      checks the subtotal/total formulas cover all 15, the cost panel points
+      at the moved cells, and the merged subtotal label moved with its row;
+      12 lines still renders byte-for-byte as before.
 - [ ] **F2d. Remembered Activity / Overage per material.** Neither is in the
       source data. Store the last value used per material (Warehouse or Lab
       row, by id), pre-fill it on the next record sheet, overridable per sheet.
@@ -272,13 +289,12 @@ user will supply data for it later, likely as its own table — that feeds F2d.
       always resolved from the DB (`record_line_catalog`), a missing price
       shown blank and flagged. The profile's flavor lines append after the
       excipients automatically. Saved and reopenable; a "Download Sample Record
-      Sheet" button renders it. Renderer capacity reads the section size from
-      the template, so the enlarged template needs no code change. A
-      "Download Labels" button renders F4 from the same record. Flag (don't
-      block) when the profile's BASE mg ≠ the actives' label-claim total.
+      Sheet" button renders it. Excipient overflow grows the sheet (F2c2).
+      Flag (don't block) when the profile's BASE mg ≠ the actives'
+      label-claim total.
       DoD: usable in the app end-to-end — a record sheet built from a synthetic
       flavor profile, saved, reopened and downloaded; `pytest` covers the save
-      tables, the auto-fill, the BASE check and capacity-from-template.
+      tables, the auto-fill and the BASE check.
 - [ ] **F2f. Paste actives from the PL Cost Sheet.** A paste box on the F2e
       tab: user copies a formula table from the Google Sheet (TSV on the
       clipboard), the app parses Material, Label Claim, Activity, Overage,
@@ -298,7 +314,8 @@ user will supply data for it later, likely as its own table — that feeds F2d.
       match go to the same resolve step as F2f. Needs the real manager sheet in
       `data/real/templates/` to confirm it follows the template's rows.
       DoD: usable in the app; `pytest` covers import from a synthetic manager
-      sheet, flavor lines appended after its excipients, and overflow refusal.
+      sheet, flavor lines appended after its excipients, and excipient overflow
+      growing the sheet (F2c2).
       *2026-09-24: F2i chose a copy block over writing into the manager's
       file, partly because openpyxl alters a workbook it saves — weigh that
       here too when this is unparked.*

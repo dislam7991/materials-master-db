@@ -118,7 +118,8 @@ no values) — Human, filled after lab testing if at all.
    totals `SUM`s, the banding and the merge itself. A tool must not do it
    with openpyxl: `insert_rows` shifts cells only, leaving every range, the
    `$F$50` refs in H and M5/N5's refs to J35/J49 pointing at the old rows.
-   (The F2c renderer refuses to grow for the same reason.)
+   (The F2c renderer refuses to grow for the same reason; SPEC F2c2, which
+   would teach it to, is parked.)
 6. **The "blank" template isn't blank** — it carries a full example formula
    (header, 16 lines, prices). Matters only when rendering from the template
    (F2c): clear A:E and I on rows 12–34 / 37–48 and the header inputs first.
