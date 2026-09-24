@@ -168,11 +168,11 @@ done. The three real templates were received 2026-09-21 and are mapped in
       three, with template defects as findings); the two spreadsheet shapes
       are rebuilt synthetically inside `tests/test_flavor_sheets.py` and
       `tests/test_sample_record.py`, so CI needs no committed template file.
-- **You, not the automation (updated 2026-09-24):** open `Sample Labels
-  Blank.doc` in Word and Save As `Sample Labels Blank.docx` alongside it
-  (F4 needs it once unparked). For F2f when it's unparked: one PL Cost
-  Sheet formula table pasted into `data/real/templates/pl_cost_paste.txt` (header row included).
-  The manager-built record sheet arrived 2026-09-24
+- **You, not the automation (updated 2026-09-24):** answer F4's three
+  questions before it's built. For F2f when it's unparked: one PL Cost Sheet
+  formula table pasted into `data/real/templates/pl_cost_paste.txt` (header
+  row included). The labels template arrived as `.docx` 2026-09-24. The
+  manager-built record sheet arrived 2026-09-24
   (`Sample_Record_Sheet_Template_Filled.xlsx`, layout map §1). The template
   is **not** to be enlarged or "fixed" by hand any more — the typed F values
   are the PL Cost Sheet paste, on purpose. When a flavor profile doesn't fit,
@@ -209,12 +209,34 @@ done. The three real templates were received 2026-09-21 and are mapped in
       on the block builder with synthetic profiles: column order and count,
       BASE skipped, D/E/F defaults, blank Part # and blank price stay empty
       fields, a name containing a tab or newline can't shift columns.
+- [ ] **F4. Labels** (unparked 2026-09-24, user's call). Fill the labels
+      template `data/real/templates/Sample Labels Blank Template.docx`
+      (layout map §3 — the text is in a 5×3 table, not the shapes). Label data,
+      all from the app: Customer, Product, Flavor and Sample ID from the flavor
+      sheet and profile; **Serving Size** = scoops per serving (typed in the
+      app, stored per product so it's entered once) + serving weight = the
+      profile's BASE mg + its flavor lines' mg, in grams (BASE typically
+      already includes the excipients). A "Download Labels" button per flavor
+      profile on the Flavor Sheet tab; `.docx` out. Fill, never regenerate:
+      copy label 1's five paragraphs into each label printed, keeping their
+      formatting; never touch the outline shapes. No docx library in the ETL.
+      **Confirm with the user before building:** (a) does a value replace the
+      caption (`Acme`) or follow it (`CUSTOMER: Acme`); (b) how many labels
+      per flavor — one, a chosen count, or all ten; (c) the Serving Size
+      wording (e.g. `2 scoops (12.3 g)`) and grams' decimals.
+      DoD: usable in the app — pick a profile, download labels, open in Word
+      and the grid still lines up with the label sheet (user confirms on a
+      test print). `pytest` fills a synthetic `.docx` of the real shape
+      (5×3 table, exact row heights, 10 outline shapes): values land in the
+      right cells, formatting and row heights unchanged, shapes untouched,
+      weight = BASE + lines in g, scoops remembered per product, a blank
+      field stays blank rather than printing `None`.
 - [ ] **F2h. Snapshot at download** (moved from F4; narrowed 2026-09-24 —
       the record sheet has no download any more, and the app can't see a
-      copy). Each download of a flavor sheet — and of labels, once F4 is
-      unparked — stores the numbers it was rendered from (prices included)
-      with a timestamp, so a reprint after a reprice is
-      distinguishable from — and comparable to — the copy that was sent.
+      copy). Each download of a flavor sheet or of labels (F4) stores the
+      numbers it was rendered from (prices included) with a timestamp, so a
+      reprint after a reprice is distinguishable from — and comparable to —
+      the copy that was sent.
       DoD: `pytest` shows a reprice between two downloads yields two
       snapshots that differ, and the first is still retrievable.
 
@@ -222,21 +244,9 @@ done. The three real templates were received 2026-09-21 and are mapped in
 
 Kept, not dropped: the user wants all of these eventually. F2d–F2g were the
 "build the whole sheet in the app" path; F2i does the part that saves the most
-copy-paste first. F4 (labels) waits with them. Activity per material: the
+copy-paste first. Activity per material: the
 user will supply data for it later, likely as its own table — that feeds F2d.
 
-- [ ] **F4. Labels** (parked 2026-09-24 with the record-sheet path, user's
-      call). Fill the ten 4"×2" text boxes of the labels template (layout map
-      §3). Label data, all from the app (user, 2026-09-24): Customer, Product,
-      Flavor and Sample ID from the flavor sheet and profile; **scoop weight**
-      = the profile's BASE mg + its flavor lines' mg, shown in grams;
-      **scoops per serving** typed in the app and stored per product, so it's
-      entered once. Fill, never regenerate: needs the template saved once as
-      `.docx` (no Python library writes `.doc`). Snapshotting at generation
-      is F2h's.
-      DoD: `pytest` fills a synthetic `.docx` of the real shape and checks the
-      scoop weight sum; the ETL still imports no docx library. **Blocked
-      until** `Sample Labels Blank.docx` is in `data/real/templates/`.
 - [ ] **F2d. Remembered Activity / Overage per material.** Neither is in the
       source data. Store the last value used per material (Warehouse or Lab
       row, by id), pre-fill it on the next record sheet, overridable per sheet.

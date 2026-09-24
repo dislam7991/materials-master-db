@@ -13,7 +13,7 @@ the user's OneDrive Desktop, 2026-09-21.
 |---|---|---|---|
 | Sample Record Sheet | `.xlsx` (OOXML, SharePoint content type) | **none** (no `vbaProject.bin`) | Sheet1 (the form), Sheet2 (empty), Sheet3 (stub) |
 | Flavor Sheet | `.xlsx` (OOXML, SharePoint content type) | **none** | Sheet1 (form), Sheet2 (older variant) |
-| Sample Labels | **`.doc`** — Word 97-2003 binary, not Excel | **none** (`HasVBProject = False`) | one page |
+| Sample Labels | `.docx` since 2026-09-24 (was `.doc`, Word 97-2003 binary — re-saved by the user) | **none** (`HasVBProject = False`) | one page |
 
 SPEC question 3 answered: **no macros anywhere.** Question 8 answered in
 part: labels are already Word, not a spreadsheet.
@@ -228,15 +228,31 @@ base: **four flavor slots** per page, two across × two down.
 5. Row banding is static fill (`D0CECE`), not conditional — harmless.
 6. Also ships with example data (2 flavors, 9 and 10 lines) to clear.
 
-## 3. Sample Labels (`.doc`)
+## 3. Sample Labels (`Sample Labels Blank Template.docx`)
+
+Re-read from the `.docx` the user saved on 2026-09-24 (the `.doc` is gone
+from `data/real/templates/`). This corrects the first pass, which took the
+shapes for text boxes.
 
 - US Letter portrait, margins T 0.5" / B 0.42" / L 0.24" / R 0.31".
-- **2 × 5 grid of 4" × 2" labels** (288 × 144 pt) — Avery 5163/8163 geometry.
-  A 5×3 table (middle column is a 0.19" gutter) sets the grid; **10 floating
-  rectangle AutoShapes (text boxes)** sit on top of the cells and hold the
-  text.
-- No mail merge, no fields, no content controls, no form fields, no images.
-- Only label 1 has content — five caption lines; labels 2–10 are empty boxes.
+- **2 × 5 grid of 4" × 2" labels** — Avery 5163/8163 geometry. **The text
+  lives in a table**: 5 rows × 3 columns, grid 5760 / 270 / 5760 twips
+  (4" label, 0.19" gutter, 4" label), every row `trHeight` **exact** 2880
+  (2"). Cells are vertically centred; a label is cell (row, col 1 or 3),
+  read left-right, top-down → labels 1–10.
+- **The 10 shapes hold no text.** They are rounded-rectangle outlines (no
+  fill, 0.25 pt grey line), anchored to the page after the table, one over
+  each label: cut/placement guides. `wps` shape + VML `v:roundrect`
+  fallback each. A renderer never touches them.
+- Label 1 (row 1, col 1) holds five centred paragraphs, one run each:
+  `CUSTOMER`, `PRODUCT`, `FLAVOR`, `SAMPLE ID`, `SERVING SIZE`. Labels 2–10
+  are one empty paragraph each; the gutter cells have none.
+- No mail merge, fields, content controls, form fields or images. One
+  bookmark (`Blank_MP1_panel1`, left by Word's label wizard) in label 1.
+- **Fill** = copy label 1's five paragraphs into each label to be printed
+  (keeping `w:pPr`/`w:rPr`) and set each run's text. The table's exact row
+  heights keep the grid put however long a value is; an over-long value
+  clips instead of shifting the next label.
 
 Sources as decided 2026-09-24 (the record sheet is no longer built in the
 app, so nothing comes from it):
@@ -247,21 +263,15 @@ app, so nothing comes from it):
 | PRODUCT | DB | flavor sheet header |
 | FLAVOR | DB | flavor profile name |
 | SAMPLE ID | DB | flavor profile's sample code |
-| SERVING SCOOP | Human, once per product | scoops per serving, typed in the app and stored per product |
-| WEIGHT | Computed | profile BASE mg + its flavor lines' mg, in grams |
+| SERVING SIZE | Human, once per product + Computed | scoops per serving (typed in the app, stored per product) and the serving weight = profile BASE mg + its flavor lines' mg, in grams. BASE typically already includes the excipients (user, 2026-09-24), so this is the full serving. |
 
 One value is typed, and only the first time a product is labelled.
 
-**Format problem:** no Python library writes binary `.doc`. Options:
-
-- **Save As `.docx` once** (Word, by the template owner) and fill the text
-  boxes' `w:txbxContent` — keeps "fill, never regenerate". Recommended.
-- PDF at the Avery 5163 geometry — right for printing, but a regenerated
-  layout (SPEC rejects that for the spreadsheets; for labels it's open, Q8).
-- Keep `.doc` and drive Word itself (COM automation via `pywin32`) — works
-  only on a Windows machine with Word installed: untestable in CI, dead the
-  day the app runs anywhere else (Phase G), and a stuck Word dialog hangs the
-  app. Only worth it if the company requires `.doc` files, which Word doesn't.
+**Format — settled 2026-09-24:** `.docx`. No Python library writes binary
+`.doc`; driving Word itself (COM via `pywin32`) would only work on a Windows
+machine with Word, is untestable in CI and dies the day the app runs
+anywhere else (Phase G). The user re-saved the template once, which keeps
+"fill, never regenerate".
 
 ## 4. What openpyxl round-trip keeps and drops
 
@@ -302,9 +312,10 @@ title). One formula object entering them once removes the triple entry.
 2. Is Formula % meant to be `F/F50`? (1.2)
 3. Should flavor slots 3–4 calculate? (2.1)
 4. Is BASE mg on the flavor sheet the record sheet's total mg/serving?
+   **Answered 2026-09-24:** BASE typically includes the excipients.
 5. Is flavor-sheet Sheet2 dead?
 6. Which material name goes on which document — full or short?
-7. Can the labels template be re-saved as `.docx`?
+7. ~~Can the labels template be re-saved as `.docx`?~~ **Done 2026-09-24.**
 8. Jar/lid prices live inside the P5 formula — who updates them, and should
    they move to cells?
 9. Scoop size: E3 or G3? The filled record sheet left E3 empty and typed it
