@@ -566,6 +566,12 @@ flag, don't guess). Decision + why; the detail is in git history if needed.
   when a location search returns something visibly wrong. Pinned by
   `test_location_search_currently_matches_a_prefix_anywhere_in_the_code`.
 
+- **F4 (labels renderer) is blocked on the template.** Needs `Sample Labels
+  Blank.doc` opened in Word and saved as `Sample Labels Blank.docx` in
+  `data/real/templates/`. No Python library writes `.doc`, and the renderer
+  fills the real template rather than regenerating it, so it can't be shaped
+  or tested without that file.
+
 ### Resolved (kept for the reasoning)
 
 - **`search_by_location` didn't filter `ready_to_archive`.** Resolved: a
