@@ -159,7 +159,8 @@ done. The three real templates were received 2026-09-21 and are mapped in
       against a synthetic template of the real shape (CI installs openpyxl).
 - [x] **F2c. Sample Record Sheet** — next deliverable, same approach: work
       backwards from the template (layout map §1), reuse the flavor profiles.
-      Renderer only (`sample_record_xlsx.py`); no UI — F2d–F2g make it usable.
+      Renderer only (`sample_record_xlsx.py`); no UI. It stays unused while
+      F2d–F2g are parked — managers build the sheet themselves (F2i).
 - [x] **F3. Reverse-engineer the three real templates** (flavor sheet, sample
       record sheet, labels) — which cells are inputs, which are formulas, what
       the autocalc computes, which inputs the DB supplies vs. a human types.
@@ -167,16 +168,98 @@ done. The three real templates were received 2026-09-21 and are mapped in
       three, with template defects as findings); the two spreadsheet shapes
       are rebuilt synthetically inside `tests/test_flavor_sheets.py` and
       `tests/test_sample_record.py`, so CI needs no committed template file.
-- **F4. Labels renderer — parked (user's call, 2026-09-24).** Labels stay
-  by hand. The `.doc` template's layout (ten peel-off labels, 5×2) doesn't
-  survive a `.docx` conversion, and a label that misprints is worse than a
-  hand-typed one. Not a queue item; un-parking it is the user's call.
-- **You, not the automation (2026-09-23):** restore the formula in F12:F18
-  (layout map §1, finding 1). Also drop into `data/real/templates/`: one real
-  manager-built record sheet, and one PL Cost Sheet formula table pasted into
-  `pl_cost_paste.txt` (header row included). The template keeps its 12
-  excipient rows — F2c2 grows them instead (user's call, 2026-09-24).
-- [ ] **F2c2. Grow the excipient section instead of refusing.** Flavor
+- **You, not the automation (updated 2026-09-24):** for F2f when it's unparked: one PL Cost Sheet
+  formula table pasted into `data/real/templates/pl_cost_paste.txt` (header
+  row included). The labels template arrived as `.docx` 2026-09-24. The
+  manager-built record sheet arrived 2026-09-24
+  (`Sample_Record_Sheet_Template_Filled.xlsx`, layout map §1). The template
+  is **not** to be enlarged or "fixed" by hand any more — the typed F values
+  are the PL Cost Sheet paste, on purpose. When a flavor profile doesn't fit,
+  insert rows in Excel (it extends the ranges itself) before pasting F2i's
+  block.
+- [ ] **F2i. Flavor lines as a copy block** (user's workflow and call,
+      2026-09-24 — layout map §1, "A filled manager sheet"). The manager
+      downloads the record sheet from OneDrive, pastes the actives from the PL
+      Cost Sheet and types the excipients; the flavor lines are the part the
+      app saves typing on. The app **never opens or writes the manager's
+      file** — openpyxl would change it on save (layout §4) and can't grow the
+      section safely (finding 5); Excel does both correctly when the user
+      inserts rows. On a Sample Record Sheet tab (new; holds only this — the
+      rest of F2e's design stays parked): pick a flavor profile, get its lines
+      as tab-separated text with a copy button, pasted by the user into column
+      A of the first empty row below the last excipient, spreading over A:I.
+      - One row per profile line, BASE excluded (BASE is the actives already on
+        the sheet). Columns: A Part # (blank if none), B material name,
+        C label claim = the profile's mg/serving, D `1` (Activity 100 %),
+        E `0` (Overage), F = C (Actual Input, a value), G and H empty (the user
+        fills g/run and Formula % down from the excipient row), I Price/kg.
+        No header row. J/K are not in the block.
+      - Part # and Price/kg resolved from the DB (`record_line_catalog`),
+        never copied into the profile; a missing price is an empty field,
+        flagged beside the block, never 0.
+      - Show the line count, so the user knows how many rows to insert first
+        when the section is short.
+      - Part numbers that Excel would reformat on paste (all digits with
+        leading zeros) must survive — check the real `dtf_part_num` shapes
+        before choosing how.
+      - Scoop size and Jar/Lid are not involved.
+      DoD: usable in the app — pick a profile, copy, paste into the real
+      template in Excel lands in the right columns (user confirms). `pytest`
+      on the block builder with synthetic profiles: column order and count,
+      BASE skipped, D/E/F defaults, blank Part # and blank price stay empty
+      fields, a name containing a tab or newline can't shift columns.
+- [ ] **F4. Labels** (unparked 2026-09-24, user's call). Fill the labels
+      template `data/real/templates/Sample Labels Blank Template.docx`
+      (layout map §3 — the text is in a 5×3 table, not the shapes) from a
+      flavor sheet: **one label per flavor profile**, in the sheet's order,
+      labels 1–10 read left-right, top-down. More than 10 flavors → more
+      documents, 10 flavors each; unused labels stay empty. A "Download
+      Labels" button on the Flavor Sheet tab, one download per document.
+      Extra copies (retain, multiple ship-to units) the user makes by hand.
+      - Five lines per label, **values only — no captions** (user,
+        2026-09-24): customer, product (flavor sheet header), flavor name,
+        sample code (profile), and serving size as `<n> scoop serving
+        (<g> g)`, e.g. `2 scoop serving (12.3 g)`.
+      - `<n>` = scoops per serving, a field in the app **pre-filled with 1**
+        (most products, user 2026-09-24) and stored per product, so a
+        product that differs is changed once and remembered; a whole number
+        prints without decimals. `<g>` = the
+        profile's BASE mg + its flavor lines' mg, in grams, **1 decimal,
+        rounded half-up** (not Python's `round`, which rounds 0.05 to even).
+        BASE typically already includes the excipients. Water volume, when
+        needed, the user adds by hand.
+      - Fill, never regenerate: copy label 1's five paragraphs into each
+        label used, keeping `w:pPr`/`w:rPr`, and set the run text; never
+        touch the outline shapes. `.docx` out. No docx library in the ETL.
+      DoD: usable in the app — download labels for a flavor sheet, open in
+      Word, and the grid lines up with the label stock (user confirms on a
+      test print). `pytest` fills a synthetic `.docx` of the real shape (5×3
+      table, exact row heights, 10 outline shapes): one label per profile in
+      order, no captions, 11 flavors → two documents (10 + 1), formatting and
+      row heights unchanged, shapes untouched, grams half-up to 1 decimal,
+      a new product defaults to 1 scoop, a changed count is remembered per
+      product, a blank field prints empty, never
+      `None`.
+- [ ] **F2h. Snapshot at download** (moved from F4; narrowed 2026-09-24 —
+      the record sheet has no download any more, and the app can't see a
+      copy). Each download of a flavor sheet or of labels (F4) stores the
+      numbers it was rendered from (prices included) with a timestamp, so a
+      reprint after a reprice is distinguishable from — and comparable to —
+      the copy that was sent.
+      DoD: `pytest` shows a reprice between two downloads yields two
+      snapshots that differ, and the first is still retrievable.
+
+#### Parked in Phase F (user's call, 2026-09-24 — the automation skips these)
+
+Kept, not dropped: the user wants all of these eventually. F2c2 and F2d–F2g
+were the "build the whole sheet in the app" path; F2i does the part that
+saves the most copy-paste first. Activity per material: the user will supply
+data for it later, likely as its own table — that feeds F2d.
+
+- [ ] **F2c2. Grow the excipient section instead of refusing.** *(Planned
+      in #40, parked the same day: F2i's copy block replaced it, user's
+      call 2026-09-24 — Excel grows the section when the user inserts rows.
+      It only matters again if F2e renders whole sheets.)* Flavor
       profile + excipients sometimes exceed the 12 rows (37–48). The renderer
       inserts the extra rows below row 48, and everything under them moves
       down intact: the merged "Inactive Ingredient Cost" subtotal row and the
@@ -206,8 +289,9 @@ done. The three real templates were received 2026-09-21 and are mapped in
       always resolved from the DB (`record_line_catalog`), a missing price
       shown blank and flagged. The profile's flavor lines append after the
       excipients automatically. Saved and reopenable; a "Download Sample Record
-      Sheet" button renders it. Excipient overflow grows the
-      sheet (F2c2). Flag (don't block) when the profile's BASE mg ≠ the actives' label-claim total.
+      Sheet" button renders it. Excipient overflow grows the sheet (F2c2).
+      Flag (don't block) when the profile's BASE mg ≠ the actives'
+      label-claim total.
       DoD: usable in the app end-to-end — a record sheet built from a synthetic
       flavor profile, saved, reopened and downloaded; `pytest` covers the save
       tables, the auto-fill and the BASE check.
@@ -232,12 +316,9 @@ done. The three real templates were received 2026-09-21 and are mapped in
       DoD: usable in the app; `pytest` covers import from a synthetic manager
       sheet, flavor lines appended after its excipients, and excipient overflow
       growing the sheet (F2c2).
-- [ ] **F2h. Snapshot at download** (moved from F4). Each download of a
-      record sheet or flavor sheet stores the numbers it was rendered
-      from (prices included) with a timestamp, so a reprint after a reprice is
-      distinguishable from — and comparable to — the copy that was sent.
-      DoD: `pytest` shows a reprice between two downloads yields two
-      snapshots that differ, and the first is still retrievable.
+      *2026-09-24: F2i chose a copy block over writing into the manager's
+      file, partly because openpyxl alters a workbook it saves — weigh that
+      here too when this is unparked.*
 
 ### Phase G — Online and multi-user (gated: do not start unprompted)
 
@@ -457,6 +538,11 @@ there's no way to know it helped.
 - **Fill the template, never regenerate it.** "Copied exactly" is the
   requirement: copy the `.xlsx`, write into known cells, save as new. Rebuilt
   layout drifts from the company form the first time someone nudges a border.
+  *Exception (user's call, 2026-09-24): the Sample Record Sheet.* The manager
+  builds it by hand from the PL Cost Sheet, so the app hands over a copy
+  block for its flavor lines (F2i) instead of filling a file. The block puts
+  a value in F over the section's formula; identical while flavor lines are
+  Activity 1 / Overage 0, stale if someone edits D/E on those rows after.
 - **Leave the autocalc fields alone** — write inputs, let the sheet's formulas
   produce outputs; two copies of a trusted calculation is a support call.
   Consequence: openpyxl doesn't evaluate formulas, so any computed value the

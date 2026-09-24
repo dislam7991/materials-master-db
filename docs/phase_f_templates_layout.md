@@ -13,7 +13,7 @@ the user's OneDrive Desktop, 2026-09-21.
 |---|---|---|---|
 | Sample Record Sheet | `.xlsx` (OOXML, SharePoint content type) | **none** (no `vbaProject.bin`) | Sheet1 (the form), Sheet2 (empty), Sheet3 (stub) |
 | Flavor Sheet | `.xlsx` (OOXML, SharePoint content type) | **none** | Sheet1 (form), Sheet2 (older variant) |
-| Sample Labels | **`.doc`** — Word 97-2003 binary, not Excel | **none** (`HasVBProject = False`) | one page |
+| Sample Labels | `.docx` since 2026-09-24 (was `.doc`, Word 97-2003 binary — re-saved by the user) | **none** (`HasVBProject = False`) | one page |
 
 SPEC question 3 answered: **no macros anywhere.** Question 8 answered in
 part: labels are already Word, not a spreadsheet.
@@ -26,6 +26,16 @@ renderer must not write it; **Static**: template text, never touched.
 
 Landscape, one formula per sample. Columns U:V are **hidden** and hold the
 jar dropdown source.
+
+**How a real one gets made** (user, 2026-09-24): the manager downloads a copy
+of the template from OneDrive, pastes the product's actives from the **PL Cost
+Sheet** (a Google Sheet, the source of the base formula) into B12 onward,
+F included — so F on those rows holds pasted numbers, not the formula — and
+types the excipients (usually one or two flow agents) at the top of the
+second section. The flavor profile's lines go below the last excipient; that
+last step is what the app helps with (SPEC F2i: a copy block the user
+pastes). The sheet is built to be read by people; inconsistencies only a
+machine sees are expected, not defects.
 
 ### Header block
 
@@ -84,14 +94,15 @@ accounting formats on money cells; `0%` on D/E/H.
 `Sheet2` is empty. `Sheet3` is a stub (`Testing`, `pH:`, `Density:` labels,
 no values) — Human, filled after lab testing if at all.
 
-### Findings (template defects — owner decides, the tool must not paper over them)
+### Findings (what a tool must know — not all are defects)
 
-1. **F12:F18 are pasted values, not formulas.** Rows 19–48 carry
-   `=IFERROR(C*(1+E)/D,0)`; the first seven active rows hold literal numbers
-   that match that formula for the example data. A renderer that writes C/D/E
-   there gets a stale F, and every cost, % and g/run downstream is wrong
-   without any visible error. Fix in the template (restore the formula), not
-   in code.
+1. **F on the actives rows is the PL Cost Sheet paste, on purpose.** The
+   template's F12:F18 and a filled sheet's F12:F30 hold numbers pasted with
+   the rest of the row; the formula `=IFERROR(C*(1+E)/D,0)` survives only on
+   the rows nobody pasted over. Don't restore it and don't "correct" pasted
+   values — the PL Cost Sheet is the source. A tool never writes F on the
+   actives rows, and never assumes F = C·(1+E)/D there (one real row is ~0.4 %
+   off).
 2. **Formula % divides label claim by total actual input.** `H = C / F50`
    mixes pre-overage mg with post-overage mg; the cached H50 in the template
    is **56.65%**, not 100%. Probably meant `F / F50`.
@@ -101,14 +112,65 @@ no values) — Human, filled after lab testing if at all.
 4. **A blank Price/kg costs $0, silently.** The example's flavor lines have
    no price; `J` treats blank I as 0 and the total looks complete. The DB
    side must leave the cell blank and flag it, never write 0.
-5. **Fixed capacity.** 23 active + 12 excipient lines. Inserting rows breaks
-   the `SUM` ranges and banding. Owner's decision (2026-09-24): keep the 12
-   excipient rows in the template and have the renderer grow the section,
-   rewriting what moves (SPEC F2c2). Actives still refuse past 23.
+5. **Capacity is per sheet, not fixed** (changed 2026-09-24). The template
+   has 23 active + 12 excipient/flavor lines; a sheet that needs more gets
+   rows inserted **by the user in Excel**, which extends the subtotal and
+   totals `SUM`s, the banding and the merge itself. A tool must not do it
+   with openpyxl: `insert_rows` shifts cells only, leaving every range, the
+   `$F$50` refs in H and M5/N5's refs to J35/J49 pointing at the old rows.
+   (The F2c renderer refuses to grow for the same reason; SPEC F2c2, which
+   would teach it to, is parked.)
 6. **The "blank" template isn't blank** — it carries a full example formula
-   (header, 16 lines, prices). The renderer must clear A:E and I on rows
-   12–34 / 37–48 and the header inputs before writing, or be given a truly
-   empty copy.
+   (header, 16 lines, prices). Matters only when rendering from the template
+   (F2c): clear A:E and I on rows 12–34 / 37–48 and the header inputs first.
+   F2i never touches a workbook.
+
+### A filled manager sheet vs. the template (2026-09-24)
+
+`data/real/templates/Sample_Record_Sheet_Template_Filled.xlsx` — one real
+record sheet a manager filled from the template, saved by Excel 16. Compared
+structure only; none of its content is reproduced here.
+
+**Unchanged — the map above holds:**
+
+- Same three sheets; `Sheet2` empty, `Sheet3` the same stub. No extra sheets,
+  columns or defined names; same package parts (`customXml`, `calcChain`,
+  `metadata.xml`, printer settings).
+- **No rows inserted or deleted.** Actives still rows 12–34, subtotal 35;
+  excipients 37–48, subtotal 49; totals 50. Merges, the E6 validation, the
+  banding ranges, column widths, hidden U:V and page setup are identical.
+- Every formula in G, H, J, K, rows 35/49/50 and the cost panel M5:Q5
+  (including P5's jar `IFS`) is the template's, character for character.
+- Header inputs sit in the mapped cells: B3:B7, E4, E5, H9. Sample code
+  confirms `<prefix>YYMMDD-NN`; Quote ID confirms `<prefix>-MMDDYY` — the
+  prefix length differs from the template's example, so don't assume one.
+- Used 19 of 23 active lines (12–30) and 7 of 12 lines in the second section
+  (37–43: the excipients, then the flavor lines), packed from the top with no
+  gaps. Every used line has a Part Number and a Price/kg; every line in the
+  second section is Activity 1 / Overage 0.
+
+**Differences:**
+
+| Where | Template | Filled | Consequence |
+|---|---|---|---|
+| F19:F30 | `=IFERROR(C*(1+E)/D,0)` | **literal numbers** | the PL Cost Sheet paste (finding 1): F12:F30 are all values, F31:F34 and F37:F48 still calculate. F30 is ~0.4 % off C·(1+E)/D — the source's number, left as is. |
+| E3 (Scoop Size) | example text | **empty** | scoop typed as free text in **G3** instead. Ignored for now (user, 2026-09-24). |
+| E6 (Jar/Lid) | one of the two list values | **empty** | P5 caches the prompt string, so Q5 caches `Missing Data`. Ignored for now (user, 2026-09-24). |
+| H50 (cached) | 56.65 % | ≈98 % | finding 2 still live with real data — Formula % doesn't sum to 100 %. |
+| G12:G28, G37 | grey fill | accent fill | manual highlight on g/run. Cosmetic. |
+| B24 / B33 | 12 pt / wrap | 11 pt + wrap / no wrap | cosmetic. |
+
+**What this means for the flavor copy block (SPEC F2i):**
+
+- The block lands in the second section starting on the row after the last
+  excipient, columns A:I. Real sheets pack lines from the top, so that's the
+  first row with an empty Raw Material (B).
+- The empty rows of the section (44–48 in the filled sheet) already carry the
+  F/G/H/J/K formulas. The block's F is a value (= C) and G/H are empty, so a
+  paste replaces those three; the user fills G and H down from the excipient
+  row afterwards, and J/K too on any rows they inserted. J/K are outside the
+  block, so on existing rows they keep calculating.
+- Paste as values (Ctrl+Shift+V) to keep the row banding.
 
 ## 2. Flavor Sheet (`Sheet1`)
 
@@ -167,34 +229,52 @@ base: **four flavor slots** per page, two across × two down.
 5. Row banding is static fill (`D0CECE`), not conditional — harmless.
 6. Also ships with example data (2 flavors, 9 and 10 lines) to clear.
 
-## 3. Sample Labels (`.doc`)
+## 3. Sample Labels (`Sample Labels Blank Template.docx`)
+
+Re-read from the `.docx` the user saved on 2026-09-24 (the `.doc` is gone
+from `data/real/templates/`). This corrects the first pass, which took the
+shapes for text boxes.
 
 - US Letter portrait, margins T 0.5" / B 0.42" / L 0.24" / R 0.31".
-- **2 × 5 grid of 4" × 2" labels** (288 × 144 pt) — Avery 5163/8163 geometry.
-  A 5×3 table (middle column is a 0.19" gutter) sets the grid; **10 floating
-  rectangle AutoShapes (text boxes)** sit on top of the cells and hold the
-  text.
-- No mail merge, no fields, no content controls, no form fields, no images.
-- Only label 1 has content — five caption lines; labels 2–10 are empty boxes.
+- **2 × 5 grid of 4" × 2" labels** — Avery 5163/8163 geometry. **The text
+  lives in a table**: 5 rows × 3 columns, grid 5760 / 270 / 5760 twips
+  (4" label, 0.19" gutter, 4" label), every row `trHeight` **exact** 2880
+  (2"). Cells are vertically centred; a label is cell (row, col 1 or 3),
+  read left-right, top-down → labels 1–10.
+- **The 10 shapes hold no text.** They are rounded-rectangle outlines (no
+  fill, 0.25 pt grey line), anchored to the page after the table, one over
+  each label: cut/placement guides. `wps` shape + VML `v:roundrect`
+  fallback each. A renderer never touches them.
+- Label 1 (row 1, col 1) holds five centred paragraphs, one run each:
+  `CUSTOMER`, `PRODUCT`, `FLAVOR`, `SAMPLE ID`, `SERVING SIZE`. Labels 2–10
+  are one empty paragraph each; the gutter cells have none.
+- No mail merge, fields, content controls, form fields or images. One
+  bookmark (`Blank_MP1_panel1`, left by Word's label wizard) in label 1.
+- The captions are placeholders: a filled label prints the values alone
+  (user, 2026-09-24), one label per flavor, 10 flavors per document.
+- **Fill** = copy label 1's five paragraphs into each label to be printed
+  (keeping `w:pPr`/`w:rPr`) and set each run's text. The table's exact row
+  heights keep the grid put however long a value is; an over-long value
+  clips instead of shifting the next label.
+
+Sources as decided 2026-09-24 (the record sheet is no longer built in the
+app, so nothing comes from it):
 
 | Caption | Role | Source |
 |---|---|---|
-| CUSTOMER | DB-derived | record sheet B3 (Brand) |
-| PRODUCT | DB-derived | record sheet B4 |
-| FLAVOR | DB-derived | record sheet B5 |
-| SAMPLE ID | DB-derived | record sheet B6 |
-| SERVING SCOOP, WEIGHT | DB-derived | record sheet E3 + serving weight = F50 mg → g |
+| CUSTOMER | DB | flavor sheet header |
+| PRODUCT | DB | flavor sheet header |
+| FLAVOR | DB | flavor profile name |
+| SAMPLE ID | DB | flavor profile's sample code |
+| SERVING SIZE | Human, once per product + Computed | scoops per serving (typed in the app, stored per product) and the serving weight = profile BASE mg + its flavor lines' mg, in grams. BASE typically already includes the excipients (user, 2026-09-24), so this is the full serving. |
 
-**Nothing on a label is typed** — every value is already in the formula
-object once the record sheet's inputs exist. Labels are the cheapest of the
-three to automate.
+One value is typed, and only the first time a product is labelled.
 
-**Format problem:** no Python library writes binary `.doc`. Options:
-
-- **Save As `.docx` once** (Word, by the template owner) and fill the text
-  boxes' `w:txbxContent` — keeps "fill, never regenerate". Recommended.
-- PDF at the Avery 5163 geometry — right for printing, but a regenerated
-  layout (SPEC rejects that for the spreadsheets; for labels it's open, Q8).
+**Format — settled 2026-09-24:** `.docx`. No Python library writes binary
+`.doc`; driving Word itself (COM via `pywin32`) would only work on a Windows
+machine with Word, is untestable in CI and dies the day the app runs
+anywhere else (Phase G). The user re-saved the template once, which keeps
+"fill, never regenerate".
 
 ## 4. What openpyxl round-trip keeps and drops
 
@@ -230,12 +310,16 @@ title). One formula object entering them once removes the triple entry.
 
 ## 6. Open questions for the template owner
 
-1. Restore the formula in record sheet F12:F18? (finding 1.1)
+1. ~~Restore the formula in record sheet F12:F18?~~ **Answered 2026-09-24:**
+   no — F on the actives rows is the PL Cost Sheet paste (finding 1.1).
 2. Is Formula % meant to be `F/F50`? (1.2)
 3. Should flavor slots 3–4 calculate? (2.1)
 4. Is BASE mg on the flavor sheet the record sheet's total mg/serving?
+   **Answered 2026-09-24:** BASE typically includes the excipients.
 5. Is flavor-sheet Sheet2 dead?
 6. Which material name goes on which document — full or short?
-7. Can the labels template be re-saved as `.docx`?
+7. ~~Can the labels template be re-saved as `.docx`?~~ **Done 2026-09-24.**
 8. Jar/lid prices live inside the P5 formula — who updates them, and should
    they move to cells?
+9. Scoop size: E3 or G3? The filled record sheet left E3 empty and typed it
+   in G3. Parked with Jar/Lid — both ignored for now (2026-09-24).
