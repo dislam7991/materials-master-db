@@ -167,24 +167,29 @@ done. The three real templates were received 2026-09-21 and are mapped in
       three, with template defects as findings); the two spreadsheet shapes
       are rebuilt synthetically inside `tests/test_flavor_sheets.py` and
       `tests/test_sample_record.py`, so CI needs no committed template file.
-- [ ] **F4. Labels renderer** (the last of the three; Flavor Sheet = F2b,
-      Sample Record Sheet = F2c). Fill the ten 4"×2" text boxes of the labels
-      template (layout map §3) from a plain data object — Customer, Product,
-      Flavor, Sample ID, serving scoop + weight — no DB access, like F2c.
-      Fill, never regenerate: needs the template saved once as `.docx`
-      (no Python library writes `.doc`). Snapshotting at generation moved to
-      F2h, since it needs saved record sheets.
-      DoD: `pytest` fills a synthetic `.docx` of the real shape; the ETL still
-      imports no docx library. **Blocked until** `Sample Labels Blank.docx`
-      is in `data/real/templates/`.
-- **You, not the automation (2026-09-23):** enlarge the template's "Flavor
-  System and Excipients" section (≈20 rows; extend J49 and F50:H50 to cover
-  them) and restore the formula in F12:F18 (layout map §1, findings 1 and 5).
-  Flavor profile + excipients sometimes exceed 12 lines. Also drop into
-  `data/real/templates/`: one real manager-built record sheet, and one PL Cost
-  Sheet formula table pasted into `pl_cost_paste.txt` (header row included).
-  Open `Sample Labels Blank.doc` in Word and Save As `Sample Labels
-  Blank.docx` alongside it (unblocks F4).
+- **F4. Labels renderer — parked (user's call, 2026-09-24).** Labels stay
+  by hand. The `.doc` template's layout (ten peel-off labels, 5×2) doesn't
+  survive a `.docx` conversion, and a label that misprints is worse than a
+  hand-typed one. Not a queue item; un-parking it is the user's call.
+- **You, not the automation (2026-09-23):** restore the formula in F12:F18
+  (layout map §1, finding 1). Also drop into `data/real/templates/`: one real
+  manager-built record sheet, and one PL Cost Sheet formula table pasted into
+  `pl_cost_paste.txt` (header row included). The template keeps its 12
+  excipient rows — F2c2 grows them instead (user's call, 2026-09-24).
+- [ ] **F2c2. Grow the excipient section instead of refusing.** Flavor
+      profile + excipients sometimes exceed the 12 rows (37–48). The renderer
+      inserts the extra rows below row 48, and everything under them moves
+      down intact: the merged "Inactive Ingredient Cost" subtotal row and the
+      totals row, their `SUM` ranges extended over the new rows, every
+      reference to a moved cell (`$F$50` in column H, `J49`/`J50` in the cost
+      panel), merged ranges, banding and the print area. New rows copy row
+      48's formulas and styles. openpyxl's `insert_rows` shifts none of this,
+      so the renderer rewrites it — anything it can't move correctly is a
+      refusal, never a silently wrong total. Actives keep their fixed 23 rows.
+      DoD: `pytest` renders 15 excipient lines into the synthetic template and
+      checks the subtotal/total formulas cover all 15, the cost panel points
+      at the moved cells, and the merged subtotal label moved with its row;
+      12 lines still renders byte-for-byte as before.
 - [ ] **F2d. Remembered Activity / Overage per material.** Neither is in the
       source data. Store the last value used per material (Warehouse or Lab
       row, by id), pre-fill it on the next record sheet, overridable per sheet.
@@ -201,13 +206,11 @@ done. The three real templates were received 2026-09-21 and are mapped in
       always resolved from the DB (`record_line_catalog`), a missing price
       shown blank and flagged. The profile's flavor lines append after the
       excipients automatically. Saved and reopenable; a "Download Sample Record
-      Sheet" button renders it. Renderer capacity reads the section size from
-      the template, so the enlarged template needs no code change. A
-      "Download Labels" button renders F4 from the same record. Flag (don't
-      block) when the profile's BASE mg ≠ the actives' label-claim total.
+      Sheet" button renders it. Excipient overflow grows the
+      sheet (F2c2). Flag (don't block) when the profile's BASE mg ≠ the actives' label-claim total.
       DoD: usable in the app end-to-end — a record sheet built from a synthetic
       flavor profile, saved, reopened and downloaded; `pytest` covers the save
-      tables, the auto-fill, the BASE check and capacity-from-template.
+      tables, the auto-fill and the BASE check.
 - [ ] **F2f. Paste actives from the PL Cost Sheet.** A paste box on the F2e
       tab: user copies a formula table from the Google Sheet (TSV on the
       clipboard), the app parses Material, Label Claim, Activity, Overage,
@@ -227,9 +230,10 @@ done. The three real templates were received 2026-09-21 and are mapped in
       match go to the same resolve step as F2f. Needs the real manager sheet in
       `data/real/templates/` to confirm it follows the template's rows.
       DoD: usable in the app; `pytest` covers import from a synthetic manager
-      sheet, flavor lines appended after its excipients, and overflow refusal.
+      sheet, flavor lines appended after its excipients, and excipient overflow
+      growing the sheet (F2c2).
 - [ ] **F2h. Snapshot at download** (moved from F4). Each download of a
-      record sheet, flavor sheet or labels stores the numbers it was rendered
+      record sheet or flavor sheet stores the numbers it was rendered
       from (prices included) with a timestamp, so a reprint after a reprice is
       distinguishable from — and comparable to — the copy that was sent.
       DoD: `pytest` shows a reprice between two downloads yields two

@@ -102,8 +102,9 @@ no values) — Human, filled after lab testing if at all.
    no price; `J` treats blank I as 0 and the total looks complete. The DB
    side must leave the cell blank and flag it, never write 0.
 5. **Fixed capacity.** 23 active + 12 excipient lines. Inserting rows breaks
-   the `SUM` ranges and banding; the renderer must refuse a formula that
-   doesn't fit rather than grow the sheet.
+   the `SUM` ranges and banding. Owner's decision (2026-09-24): keep the 12
+   excipient rows in the template and have the renderer grow the section,
+   rewriting what moves (SPEC F2c2). Actives still refuse past 23.
 6. **The "blank" template isn't blank** — it carries a full example formula
    (header, 16 lines, prices). The renderer must clear A:E and I on rows
    12–34 / 37–48 and the header inputs before writing, or be given a truly
