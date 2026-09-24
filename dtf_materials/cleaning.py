@@ -176,13 +176,3 @@ def normalize_key(value: str | None) -> str | None:
     if text is None:
         return None
     return re.sub(r"\s+", " ", text).strip().casefold()
-
-
-# Alias kept for call sites that name the specific use case.
-normalize_supplier_key = normalize_key
-
-# The self-checks that used to live here in an `if __name__ == "__main__"`
-# block now live in `tests/test_cleaning.py`, so they run on every
-# `python -m pytest` instead of only when someone remembered to execute this
-# module by hand. Every case moved across unchanged, plus the known edge
-# formats (two-digit years, "12.50 USD", trailing location separators).

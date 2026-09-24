@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 
 from dtf_materials import lab_samples
-from dtf_materials.config import LabSheetConfig
+from dtf_materials.config import SheetConfig
 from dtf_materials.db import init_db
 from dtf_materials.sources.base import rows_from_values
 
@@ -137,7 +137,7 @@ def test_every_source_column_lands_in_its_own_db_column(tmp_path, monkeypatch, c
 
 @pytest.fixture
 def config(tmp_path):
-    return LabSheetConfig(
+    return SheetConfig(
         sheet_id="fake", tab_name="fake", service_account_key_path=tmp_path / "key.json"
     )
 
