@@ -75,16 +75,16 @@ FLAVOR_MATERIALS = [
 
 ALLERGENS = ["None", "None", "None", "None", "Milk", "Soy", "Tree Nut (Coconut)", ""]
 STATUSES = ["Active", "Active", "Active", "QUARANTINE", "Hold", "active", ""]
-# Real locations are hyphen-joined alphanumeric codes like "6L-27-D", plus a
-# named "cooler". Generated rather than listed so the synthetic sheet has a
-# realistic spread of codes across racks/bays/levels.
-def _location_code(rng: random.Random) -> str:
-    return f"{rng.randint(1, 8)}{rng.choice('LR')}-{rng.randint(1, 40):02d}-{rng.choice('ABCDEF')}"
-
 NAMED_LOCATIONS = ["cooler", "cooler", "back cooler", "QC hold"]
 
 
+def _location_code(rng: random.Random) -> str:
+    """Return a random rack location code shaped like the real ones (e.g. 6L-27-D)."""
+    return f"{rng.randint(1, 8)}{rng.choice('LR')}-{rng.randint(1, 40):02d}-{rng.choice('ABCDEF')}"
+
+
 def messy_date(d: date, rng: random.Random) -> str:
+    """Format a date in one of the sheet's observed styles, or blank."""
     style = rng.random()
     if style < 0.55:
         return f"{d.month}/{d.day}/{d.year}"
@@ -96,6 +96,7 @@ def messy_date(d: date, rng: random.Random) -> str:
 
 
 def messy_price(base: float, rng: random.Random) -> str:
+    """Format a price the ways the sheet does: plain, $, padded, decimal comma, /kg, blank or text."""
     style = rng.random()
     if style < 0.45:
         return f"{base:.2f}"
@@ -113,9 +114,7 @@ def messy_price(base: float, rng: random.Random) -> str:
 
 
 def messy_location(rng: random.Random) -> str:
-    """Build a Locations cell in the real formats, including the dirty ones:
-    inconsistent separators/spacing, wrong case, a truncated code, a
-    free-text named location, and the occasional blank cell."""
+    """Return a Locations cell in the real formats, dirty ones included (bad separators, case, truncation, blanks)."""
     r = rng.random()
     if r < 0.06:
         return ""                                   # blank / NULL
@@ -134,6 +133,7 @@ def messy_location(rng: random.Random) -> str:
 
 
 def messy_name(name: str, rng: random.Random) -> str:
+    """Occasionally add stray whitespace or shout a material name in capitals."""
     r = rng.random()
     if r < 0.08:
         return " " + name
@@ -146,6 +146,7 @@ def messy_name(name: str, rng: random.Random) -> str:
 
 def make_row(part_num: str, name: str, category: int, supplier_variants: list[str],
              base_price: float, seq: int, rng: random.Random) -> list[str]:
+    """Return one receiving row of the sheet, with realistic dirt in most cells."""
     received = date(2024, 1, 1) + timedelta(days=rng.randint(0, 900))
     exp = received + timedelta(days=rng.choice([365, 540, 730, 1095]))
     start_stock = round(rng.uniform(0.5, 120.0), 2)
@@ -183,56 +184,68 @@ def make_row(part_num: str, name: str, category: int, supplier_variants: list[st
     ]
 
 
-def main(out_path: Path) -> None:
-    rng = random.Random(SEED)
+def _unique_part(prefix: str, used: set[str], rng: random.Random) -> str:
+    """Return a part number like RM-1234 not already in `used`, and record it."""
+    part = f"{prefix}-{rng.randint(1000, 9999)}"
+    while part in used:
+        part = f"{prefix}-{rng.randint(1000, 9999)}"
+    used.add(part)
+    return part
 
-    # Build the material catalog: (part_num, name, category, supplier_variants, base_price)
+
+def build_catalog(rng: random.Random) -> list[tuple]:
+    """Return the materials as (part_num, name, category, supplier_variants, base_price) tuples."""
     catalog = []
-    used_parts = set()
+    used_parts: set[str] = set()
     for name in RAW_MATERIALS:
-        cat = 1
         supplier = rng.choice(list(SUPPLIERS.values()))
-        part = f"RM-{rng.randint(1000, 9999)}"
-        while part in used_parts:
-            part = f"RM-{rng.randint(1000, 9999)}"
-        used_parts.add(part)
-        catalog.append((part, name, cat, supplier, rng.uniform(4, 90)))
+        part = _unique_part("RM", used_parts, rng)
+        catalog.append((part, name, 1, supplier, rng.uniform(4, 90)))
     for name in FLAVOR_MATERIALS:
         supplier = SUPPLIERS["Sensapure Flavors"] if rng.random() < 0.5 else rng.choice(list(SUPPLIERS.values()))
-        part = f"FL-{rng.randint(1000, 9999)}"
-        while part in used_parts:
-            part = f"FL-{rng.randint(1000, 9999)}"
-        used_parts.add(part)
+        part = _unique_part("FL", used_parts, rng)
         catalog.append((part, name, 2, supplier, rng.uniform(15, 160)))
-    catalog = catalog[:N_MATERIALS]
+    return catalog[:N_MATERIALS]
 
-    rows = []
-    # one row per material
-    for i, (part, name, cat, sup, price) in enumerate(catalog):
-        rows.append(make_row(part, name, cat, sup, price, i, rng))
-    # extra receivings (legit duplicates of part # = multiple lots, the good kind)
+
+def build_rows(catalog: list[tuple], rng: random.Random) -> list[list[str]]:
+    """Return the sheet's rows, shuffled: one per material, repeat lots, conflicting and missing part #s."""
+    rows = [make_row(part, name, cat, sup, price, i, rng)
+            for i, (part, name, cat, sup, price) in enumerate(catalog)]
+    # Extra receivings: legitimate repeats of a part # (more lots).
     for i in range(EXTRA_LOT_ROWS):
         part, name, cat, sup, price = rng.choice(catalog)
         rows.append(make_row(part, name, cat, sup, price, i, rng))
-    # the bad kind of duplicate: same part #, *different* material name
+    # The bad kind of repeat: same part #, a different material's name.
     for i in range(DUP_PART_ROWS):
         victim = rng.choice(catalog)
         other = rng.choice(catalog)
         while other[0] == victim[0]:
             other = rng.choice(catalog)
         rows.append(make_row(victim[0], other[1], other[2], other[3], other[4], i, rng))
-    # missing part #s
+    # Rows with no part # at all.
     for i in range(MISSING_PART_ROWS):
         _, name, cat, sup, price = rng.choice(catalog)
         rows.append(make_row("", name, cat, sup, price, i, rng))
-
     rng.shuffle(rows)
+    return rows
 
+
+def write_csv(rows: list[list[str]], out_path: Path) -> None:
+    """Write the header and rows to out_path as CSV, creating its folder if needed."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(HEADERS)
         writer.writerows(rows)
+
+
+def main(out_path: Path) -> None:
+    """Generate the seeded synthetic sheet at out_path and print what it contains."""
+    rng = random.Random(SEED)
+    catalog = build_catalog(rng)
+    rows = build_rows(catalog, rng)
+    write_csv(rows, out_path)
 
     print(f"Wrote {len(rows)} rows -> {out_path}")
     print(f"  distinct materials: {len(catalog)}")
