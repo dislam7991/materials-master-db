@@ -25,15 +25,13 @@ _LOCATION_CODE = re.compile(r"^[A-Z0-9]+(?:-[A-Z0-9]+)+$")
 # Named locations that are legitimately words rather than codes.
 KNOWN_NAMED_LOCATIONS = {"COOLER"}
 
-# A lab sample's RD-ID: the R&D-owned stable identity, exactly RD- then four
-# digits (RD-0000..RD-9999). Anchored and case-sensitive on the prefix — a
-# typo'd id must be rejected, not coerced, because it becomes a formula's stable
-# handle. Four digits (not three) because the catalog is already near 600.
+# A lab sample's RD-ID: exactly RD- then four digits. A typo'd id is rejected,
+# not coerced, because it becomes a stable handle other rows point at.
 _RD_ID = re.compile(r"^RD-\d{4}$")
 
 
 def clean_text(value: str | None) -> str | None:
-    """Trim whitespace; empty string becomes None."""
+    """Return the trimmed text, or None if it's blank."""
     if value is None:
         return None
     text = value.strip()
@@ -41,8 +39,7 @@ def clean_text(value: str | None) -> str | None:
 
 
 def parse_date(value: str | None) -> str | None:
-    """Parse a date in any of the sheet's observed formats to ISO yyyy-mm-dd.
-    Returns None if blank or unrecognized."""
+    """Return a date in any of the sheet's formats as ISO yyyy-mm-dd, or None if blank or unrecognized."""
     text = clean_text(value)
     if text is None:
         return None
@@ -55,9 +52,7 @@ def parse_date(value: str | None) -> str | None:
 
 
 def parse_price(value: str | None) -> float | None:
-    """Parse a price cell that may carry a $ sign, a /kg suffix, stray
-    whitespace, or a European decimal comma. Non-numeric text ("TBD",
-    "call") returns None rather than raising."""
+    """Return a price cell ($, /kg, spaces or decimal comma allowed) as a float, or None for text like "TBD"."""
     text = clean_text(value)
     if text is None:
         return None
@@ -79,7 +74,7 @@ def parse_price(value: str | None) -> float | None:
 
 
 def parse_float(value: str | None) -> float | None:
-    """Parse a plain numeric cell (stock quantities)."""
+    """Return a plain numeric cell (a stock quantity) as a float, or None."""
     text = clean_text(value)
     if text is None:
         return None
@@ -90,7 +85,7 @@ def parse_float(value: str | None) -> float | None:
 
 
 def parse_category(value: str | None) -> str | None:
-    """Map the sheet's '1'/'2' (or '1 Raw'/'2 Flavor') to raw/flavor."""
+    """Return "raw" or "flavor" for the sheet's '1'/'2' (or '1 Raw'/'2 Flavor'), else None."""
     text = clean_text(value)
     if text is None:
         return None
@@ -102,7 +97,7 @@ def parse_category(value: str | None) -> str | None:
 
 
 def parse_bool_flag(value: str | None) -> int:
-    """Loose truthy parse for cells like Ready To Archive ('Yes', 'y', 'TRUE')."""
+    """Return 1 for a yes-like cell ('Yes', 'y', 'TRUE', '1'), else 0."""
     text = clean_text(value)
     if text is None:
         return 0
@@ -110,18 +105,10 @@ def parse_bool_flag(value: str | None) -> int:
 
 
 def split_locations(value: str | None) -> list[str]:
-    """Split a free-text Locations cell into individual locations.
+    """Return the individual locations in a Locations cell, upper-cased and de-duplicated.
 
-    Handles the observed real formats: a single code ("6L-27-D"), several
-    comma-separated codes ("6R-09-E, 6R-10-C, 6R-13-C"), a named location
-    ("cooler"), and blank/NULL cells.
-
-    Splitting on whitespace is conditional on purpose. "6R-09-E 6R-10-C" is
-    two locations, but "back cooler" is one — so a token is only split on
-    whitespace when EVERY resulting piece looks like a location code. When
-    any piece doesn't, the token is left intact as free text rather than
-    guessed at. Returned codes are upper-cased and de-duplicated so they
-    match across rows; `lots.locations_raw` keeps the cell verbatim.
+    A token is split on spaces only when every piece is a location code:
+    "6R-09-E 6R-10-C" is two locations, "back cooler" is one.
     """
     text = clean_text(value)
     if text is None:
@@ -145,10 +132,7 @@ def split_locations(value: str | None) -> list[str]:
 
 
 def is_standard_location(location: str | None) -> bool:
-    """True if a parsed location matches the expected code format (6L-27-D)
-    or is a known named location. Free-text locations are legal but worth
-    surfacing in the quality report — a run of them usually means either a
-    typo or a real named location that belongs in KNOWN_NAMED_LOCATIONS."""
+    """True if a location is a code like 6L-27-D or a known named location."""
     text = clean_text(location)
     if text is None:
         return False
@@ -157,10 +141,7 @@ def is_standard_location(location: str | None) -> bool:
 
 
 def is_valid_rd_id(value: str | None) -> bool:
-    """True if `value` is a well-formed lab RD-ID (RD-0000..RD-9999), after
-    trimming. Pure and never raises, like the rest of this module — the lab
-    loader uses it to skip-and-flag blank or malformed ids rather than let one
-    become a phantom stable identity a formula could point at."""
+    """True if the trimmed value is a well-formed RD-ID (RD-0000..RD-9999)."""
     text = clean_text(value)
     if text is None:
         return False
@@ -168,10 +149,7 @@ def is_valid_rd_id(value: str | None) -> bool:
 
 
 def normalize_key(value: str | None) -> str | None:
-    """Case/whitespace-insensitive comparison key. Used to tell genuine
-    differences ("NutraSci" vs "Nutra Sci", "Caffeine" vs "Creatine") apart
-    from pure formatting noise (extra spaces, ALL CAPS) that shouldn't count
-    as a real conflict."""
+    """Return a case- and whitespace-insensitive key, so "NutraSci " matches "NUTRASCI" but not "Nutra Sci"."""
     text = clean_text(value)
     if text is None:
         return None

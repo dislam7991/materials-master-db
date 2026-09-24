@@ -57,7 +57,7 @@ materials (upsert, stable ids) ◄── suppliers + supplier_aliases
 lots (full reload)             ◄── lot_locations (parsed codes)
    │
    ├── quality_report.py       reads staging → identifies every dirty row
-   └── app.py + queries.py     Streamlit lookup (UI and data access separated)
+   └── app.py + ui/ + queries.py  Streamlit lookup (UI and data access separated)
 ```
 
 | Decision | Why |
@@ -509,7 +509,7 @@ usage history is ever wanted. The automation skips this section.
       materials" section; tests cover match/no-match.
 - [ ] **C4. Sample history in the app** — a material's page shows which samples
       used it; a "Samples" tab looks up a sample and its materials. Queries in
-      `queries.py`, UI in `app.py`.
+      `queries.py`, UI in a `ui/` tab module.
       DoD: both directions visible against synthetic data.
 
 ## Phase F design reference (formula builder + sample documentation)

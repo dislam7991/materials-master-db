@@ -43,6 +43,7 @@ EXCIP_FIRST, EXCIP_LAST = 37, 48        # 12 rows
 
 @pytest.fixture
 def conn(tmp_path):
+    """A connection to a fresh, empty database."""
     c = init_db(tmp_path / "test.db")
     yield c
     c.close()
@@ -50,10 +51,7 @@ def conn(tmp_path):
 
 @pytest.fixture
 def template(tmp_path):
-    """A synthetic workbook with the Record Sheet's shape: the header block, an
-    Actives section (rows 12-34) and an Excipients section (37-48) each carrying
-    example inputs to clear and the template's own computed-column formulas, and
-    the subtotal/total rows (35, 49, 50). Formulas match layout §1."""
+    """A synthetic workbook shaped like the Record Sheet template (layout §1), example inputs included."""
     wb = Workbook()
     ws = wb.active
     ws.title = "Sheet1"
@@ -68,6 +66,7 @@ def template(tmp_path):
         ws[cell] = value
 
     def _write_line_row(r: int) -> None:
+        """Write one row's example inputs and computed-column formulas."""
         # Example inputs (cleared by a fill) ...
         ws[f"A{r}"] = "DTF-EX"
         ws[f"B{r}"] = f"Example material {r}"
@@ -98,10 +97,12 @@ def template(tmp_path):
 
 
 def _open(data: bytes):
+    """Load rendered .xlsx bytes and return its sheet."""
     return load_workbook(BytesIO(data))["Sheet1"]
 
 
 def _sheet(**overrides) -> RecordSheet:
+    """Return a RecordSheet with a full header, plus overrides."""
     base = dict(
         brand="Acme", product="Pre-Workout", flavor="Berry", sample_code="AC260923-01",
         notes="fine powder", scoop_size="11cc", servings_per_unit=30,
@@ -199,6 +200,7 @@ def test_a_full_section_still_renders(template):
 # --- reuse: part # and price resolve from the referenced row -----------------
 
 def _seed_material(conn, name="Caffeine", part="DTF-100", price=42.5):
+    """Insert a priced warehouse material and return its id."""
     cur = conn.execute(
         "INSERT INTO materials (dtf_part_num, material_name, current_price_per_kilo) VALUES (?,?,?)",
         (part, name, price),
@@ -236,6 +238,7 @@ def test_a_reprice_reaches_a_rendered_sheet_without_touching_the_profile(conn, t
     fs.add_line(conn, profile, material_id=material_id, mg_per_serving=200)
 
     def _render() -> object:
+        """Render the profile with catalog fields resolved now, and return its sheet."""
         lines = []
         for l in fs.get_lines(conn, profile):
             cat = queries.record_line_catalog(conn, material_id=l["material_id"], rd_id=l["rd_id"])

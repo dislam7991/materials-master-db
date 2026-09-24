@@ -29,6 +29,7 @@ service_account_key_path = "credentials/service_account.json"
 
 
 def write_config(tmp_path, text: str):
+    """Write `text` as a config file in tmp_path and return its path."""
     path = tmp_path / "config.local.toml"
     path.write_text(text, encoding="utf-8")
     return path
