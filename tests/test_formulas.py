@@ -30,6 +30,7 @@ SYNTHETIC_CSV = PROJECT_ROOT / "data" / "synthetic" / "raw_material_inventory.cs
 
 
 def _seed_material(conn, name="Citric Acid", price=10.0, part_num="DTF-100"):
+    """Insert a priced warehouse material and return its id."""
     cur = conn.execute(
         "INSERT INTO materials (dtf_part_num, material_name, current_price_per_kilo) VALUES (?,?,?)",
         (part_num, name, price),
@@ -39,6 +40,7 @@ def _seed_material(conn, name="Citric Acid", price=10.0, part_num="DTF-100"):
 
 
 def _seed_lab_sample(conn, rd_id="RD-0001", flavor="Mango", price=25.0):
+    """Insert a priced lab sample and return its RD-ID."""
     conn.execute(
         "INSERT INTO lab_samples (rd_id, flavor_name, price_per_kilo) VALUES (?,?,?)",
         (rd_id, flavor, price),
@@ -49,6 +51,7 @@ def _seed_lab_sample(conn, rd_id="RD-0001", flavor="Mango", price=25.0):
 
 @pytest.fixture
 def conn(tmp_path):
+    """A connection to a fresh, empty database."""
     c = init_db(tmp_path / "test.db")
     yield c
     c.close()

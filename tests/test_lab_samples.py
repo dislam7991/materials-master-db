@@ -137,6 +137,7 @@ def test_every_source_column_lands_in_its_own_db_column(tmp_path, monkeypatch, c
 
 @pytest.fixture
 def config(tmp_path):
+    """A lab sheet config pointing nowhere real (fetching is monkeypatched)."""
     return SheetConfig(
         sheet_id="fake", tab_name="fake", service_account_key_path=tmp_path / "key.json"
     )

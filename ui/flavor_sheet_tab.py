@@ -27,6 +27,21 @@ NEW_SHEET = "➕ Start a new flavor sheet…"
 ADD_FLAVOR = "➕ Add a flavor"
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
+# The line table: which columns are read-only, and how each is shown.
+LINE_TABLE_READ_ONLY = ["Material", "Source", "g / sample", "Price / kg", "Cost / serving"]
+LINE_TABLE_COLUMNS = {
+    "#": st.column_config.NumberColumn(width="small", step=1,
+                                       help="Print order — change it to move a line"),
+    "mg / serving": st.column_config.NumberColumn(format="%g", min_value=0.0),
+    "g / sample": st.column_config.NumberColumn(format="%.3f"),
+    "Price / kg": st.column_config.NumberColumn(
+        format="$%.2f",
+        help="From the catalog row this line references — blank if none is on file",
+    ),
+    "Cost / serving": st.column_config.NumberColumn(format="$%.4f"),
+    "Remove": st.column_config.CheckboxColumn(width="small", help="Tick to remove the line"),
+}
+
 
 def render(conn: sqlite3.Connection) -> None:
     """Draw the tab: sheet picker, then either the new-sheet form or the open sheet."""
@@ -102,6 +117,7 @@ def _pick_sheet(conn: sqlite3.Connection) -> int | None:
 def _sheet_header_inputs(current, key: str) -> dict:
     """Draw the five header fields, prefilled from `current` when editing, and return their values."""
     def cur(field):
+        """Return the current value of a header field, or None for a new sheet."""
         return current[field] if current is not None else None
 
     c1, c2, c3, c4, c5 = st.columns([3, 3, 2, 2, 2])
@@ -337,19 +353,8 @@ def _render_line_table(conn: sqlite3.Connection, profile, lines: list, servings)
         on_change=_apply_line_edits,
         args=(conn, editor_key, line_state, version_key),
         hide_index=True, width="stretch",
-        disabled=["Material", "Source", "g / sample", "Price / kg", "Cost / serving"],
-        column_config={
-            "#": st.column_config.NumberColumn(width="small", step=1,
-                                               help="Print order — change it to move a line"),
-            "mg / serving": st.column_config.NumberColumn(format="%g", min_value=0.0),
-            "g / sample": st.column_config.NumberColumn(format="%.3f"),
-            "Price / kg": st.column_config.NumberColumn(
-                format="$%.2f",
-                help="From the catalog row this line references — blank if none is on file",
-            ),
-            "Cost / serving": st.column_config.NumberColumn(format="$%.4f"),
-            "Remove": st.column_config.CheckboxColumn(width="small", help="Tick to remove the line"),
-        },
+        disabled=LINE_TABLE_READ_ONLY,
+        column_config=LINE_TABLE_COLUMNS,
     )
     base_g = fs.grams_per_sample(profile["base_mg"], servings)
     st.caption(

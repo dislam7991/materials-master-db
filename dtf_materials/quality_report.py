@@ -138,6 +138,7 @@ def build_sections(findings: dict) -> list[tuple[str, list[str]]]:
     sections: list[tuple[str, list[str]]] = []
 
     def add(heading: str, details: list[str] | None = None) -> None:
+        """Append one section."""
         sections.append((heading, details or []))
 
     if findings["missing_part_num"]:
