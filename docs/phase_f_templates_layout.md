@@ -238,17 +238,19 @@ base: **four flavor slots** per page, two across × two down.
 - No mail merge, no fields, no content controls, no form fields, no images.
 - Only label 1 has content — five caption lines; labels 2–10 are empty boxes.
 
+Sources as decided 2026-09-24 (the record sheet is no longer built in the
+app, so nothing comes from it):
+
 | Caption | Role | Source |
 |---|---|---|
-| CUSTOMER | DB-derived | record sheet B3 (Brand) |
-| PRODUCT | DB-derived | record sheet B4 |
-| FLAVOR | DB-derived | record sheet B5 |
-| SAMPLE ID | DB-derived | record sheet B6 |
-| SERVING SCOOP, WEIGHT | DB-derived | record sheet E3 + serving weight = F50 mg → g |
+| CUSTOMER | DB | flavor sheet header |
+| PRODUCT | DB | flavor sheet header |
+| FLAVOR | DB | flavor profile name |
+| SAMPLE ID | DB | flavor profile's sample code |
+| SERVING SCOOP | Human, once per product | scoops per serving, typed in the app and stored per product |
+| WEIGHT | Computed | profile BASE mg + its flavor lines' mg, in grams |
 
-**Nothing on a label is typed** — every value is already in the formula
-object once the record sheet's inputs exist. Labels are the cheapest of the
-three to automate.
+One value is typed, and only the first time a product is labelled.
 
 **Format problem:** no Python library writes binary `.doc`. Options:
 
@@ -256,6 +258,10 @@ three to automate.
   boxes' `w:txbxContent` — keeps "fill, never regenerate". Recommended.
 - PDF at the Avery 5163 geometry — right for printing, but a regenerated
   layout (SPEC rejects that for the spreadsheets; for labels it's open, Q8).
+- Keep `.doc` and drive Word itself (COM automation via `pywin32`) — works
+  only on a Windows machine with Word installed: untestable in CI, dead the
+  day the app runs anywhere else (Phase G), and a stuck Word dialog hangs the
+  app. Only worth it if the company requires `.doc` files, which Word doesn't.
 
 ## 4. What openpyxl round-trip keeps and drops
 
