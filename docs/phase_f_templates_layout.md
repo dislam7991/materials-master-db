@@ -109,6 +109,50 @@ no values) — Human, filled after lab testing if at all.
    12–34 / 37–48 and the header inputs before writing, or be given a truly
    empty copy.
 
+### A filled manager sheet vs. the template (2026-09-24)
+
+`data/real/templates/Sample_Record_Sheet_Template_Filled.xlsx` — one real
+record sheet a manager filled from the template, saved by Excel 16. Compared
+structure only; none of its content is reproduced here.
+
+**Unchanged — the map above holds:**
+
+- Same three sheets; `Sheet2` empty, `Sheet3` the same stub. No extra sheets,
+  columns or defined names; same package parts (`customXml`, `calcChain`,
+  `metadata.xml`, printer settings).
+- **No rows inserted or deleted.** Actives still rows 12–34, subtotal 35;
+  excipients 37–48, subtotal 49; totals 50. Merges, the E6 validation, the
+  banding ranges, column widths, hidden U:V and page setup are identical.
+- Every formula in G, H, J, K, rows 35/49/50 and the cost panel M5:Q5
+  (including P5's jar `IFS`) is the template's, character for character.
+- Header inputs sit in the mapped cells: B3:B7, E4, E5, H9. Sample code
+  confirms `<prefix>YYMMDD-NN`; Quote ID confirms `<prefix>-MMDDYY` — the
+  prefix length differs from the template's example, so don't assume one.
+- Used 19 of 23 active lines (12–30) and 7 of 12 excipient lines (37–43),
+  packed from the top with no gaps. Every used line has a Part Number and a
+  Price/kg; every excipient is Activity 1 / Overage 0.
+
+**Differences:**
+
+| Where | Template | Filled | Consequence |
+|---|---|---|---|
+| F19:F30 | `=IFERROR(C*(1+E)/D,0)` | **literal numbers** | finding 1 has spread: F12:F30 are now all values, only F31:F34 and F37:F48 still calculate. F12:F29 match the formula (F27 only to rounding); **F30 is stale** — ~0.4 % off its own C/D/E. |
+| E3 (Scoop Size) | example text | **empty** | scoop typed as free text in **G3** instead — a cell outside the merged input, next to the E3:F3 box. |
+| E6 (Jar/Lid) | one of the two list values | **empty** | P5 caches the prompt string, so Q5 caches `Missing Data`: the sheet as saved has **no total cost/unit**. |
+| H50 (cached) | 56.65 % | ≈98 % | finding 2 still live with real data — Formula % doesn't sum to 100 %. |
+| G12:G28, G37 | grey fill | accent fill | manual highlight on g/run. Cosmetic. |
+| B24 / B33 | 12 pt / wrap | 11 pt + wrap / no wrap | cosmetic. |
+
+**What this means for the import (F2g):**
+
+- Reading lines by fixed rows (12–34, 37–48) works on a real sheet; stop at
+  the first row with no Raw Material in each section.
+- **Never read F.** Recompute from C/D/E — F is a mix of formula and pasted,
+  possibly stale values.
+- Scoop size: read E3; when it's blank and G3 has text, show G3 for the user
+  to confirm rather than silently taking either.
+- A blank Jar/Lid is normal in the wild; import it as blank, don't refuse.
+
 ## 2. Flavor Sheet (`Sheet1`)
 
 > **Template revised 2026-09-22** (the copy in `data/real/templates/` was
@@ -229,7 +273,9 @@ title). One formula object entering them once removes the triple entry.
 
 ## 6. Open questions for the template owner
 
-1. Restore the formula in record sheet F12:F18? (finding 1.1)
+1. Restore the formula in record sheet F12:F18? (finding 1.1) — managers
+   paste F values further down too (F19:F30 in the filled sheet, one stale);
+   protecting column F would stop it.
 2. Is Formula % meant to be `F/F50`? (1.2)
 3. Should flavor slots 3–4 calculate? (2.1)
 4. Is BASE mg on the flavor sheet the record sheet's total mg/serving?
@@ -238,3 +284,5 @@ title). One formula object entering them once removes the triple entry.
 7. Can the labels template be re-saved as `.docx`?
 8. Jar/lid prices live inside the P5 formula — who updates them, and should
    they move to cells?
+9. Scoop size: E3 or G3? The filled record sheet left E3 empty and typed it
+   in G3.
