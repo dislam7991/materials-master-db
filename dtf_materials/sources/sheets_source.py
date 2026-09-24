@@ -1,13 +1,8 @@
 """Google Sheets inventory source — reads the real company sheet.
 
-Only used when the ETL is run with `--source sheets` on a machine that has
-`config.local.toml` set up (see dtf_materials.config). Nothing in the default
-CSV path imports this module, so gspread/google-auth are never required just
-to run the synthetic pipeline or the test suite — see requirements-sheets.txt.
-
-Read-only end to end: the service account backing this is granted Viewer
-access on the sheet (never Editor), and nothing below calls a write endpoint,
-so there is no code path here that could modify the source sheet.
+Used only by `etl --source sheets`; the default CSV path never imports it, so
+gspread is optional. Read-only: the service account has Viewer access and
+nothing here calls a write endpoint.
 """
 
 from __future__ import annotations
@@ -26,13 +21,18 @@ class SheetHeaderError(Exception):
 
 
 class SheetsInventorySource(InventorySource):
+    """Reads inventory rows from the configured Google Sheet tab."""
+
     def __init__(self, config: SheetConfig):
+        """Remember the sheet config; nothing is fetched until rows() is called."""
         self.config = config
 
     def rows(self) -> Iterator[RawRow]:
+        """Fetch the tab and yield one dict per data row, keyed by header."""
         yield from self._rows_from_values(self._fetch_values())
 
     def _fetch_values(self) -> list[list[str]]:
+        """Return the tab's raw cell values, header row included."""
         worksheet = open_worksheet(
             self.config.sheet_id, self.config.tab_name, self.config.service_account_key_path
         )
@@ -40,7 +40,5 @@ class SheetsInventorySource(InventorySource):
 
     @staticmethod
     def _rows_from_values(values: list[list[str]]) -> Iterator[RawRow]:
-        """Split out from `rows()` so the header check and row-shaping logic
-        (shared with the lab-sample loader, see sources.base.rows_from_values)
-        can be unit-tested without a real Sheets connection."""
+        """Check the header and shape rows from raw values (split out so tests need no Sheets connection)."""
         return rows_from_values(values, EXPECTED_HEADERS, SheetHeaderError)

@@ -152,14 +152,16 @@ live sheet.
 
 ## The lookup app
 
-[app.py](app.py) is UI only; [queries.py](dtf_materials/queries.py) is all data
-access — separate so the queries can be tested from a REPL or reused by a
-future CLI without importing Streamlit.
+[app.py](app.py) lays out the page and [ui/](ui/) holds one module per tab;
+[queries.py](dtf_materials/queries.py) is all data access — separate so the
+queries can be tested from a REPL or reused by a future CLI without importing
+Streamlit.
 
-Five tabs: one search across both catalogs, saying whether something is in the
+Six tabs: one search across both catalogs, saying whether something is in the
 warehouse, the lab, or both; a material by Part # or name; what's at a location
 (a full code like `6L-27-D`, or an aisle prefix like `6L`); everything in a
-sortable table; the lab's samples by vendor, flavor name, sample code or Part #.
+sortable table; the lab's samples by vendor, flavor name, sample code or Part #;
+and the Flavor Sheet builder.
 
 **The combined tab is the way in, not a replacement.** It summarizes whichever
 sides exist and names the tab holding the rest, because the two single-source

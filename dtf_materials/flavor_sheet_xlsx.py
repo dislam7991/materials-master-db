@@ -1,36 +1,10 @@
 """Fill the company Flavor Sheet template from a flavor sheet's data.
 
-Fill, never regenerate (SPEC Phase F): copy the template workbook, write the
-inputs into known cells, keep every border, fill and page setting it already
-has. Cell map in docs/phase_f_templates_layout.md §2. What gets written:
-
-- A3  "Product Name: <Customer - Product - Quote ID>" (label and value share
-  one merged cell in the template, so it's one string);
-- F3  servings per flavor — the one cell every gram formula reads;
-- per flavor slot: the title (flavor name + Sample ID), the BASE mg, then each
-  material name and its mg per serving; the g column gets the template's own
-  formula, =<mg cell>*$F$3/1000, so Excel does the arithmetic, not this code.
-
-Two things the template can't do on its own, handled here:
-
-- **More lines than the slot has rows.** The top pair of slots prints BASE + 12
-  lines, the bottom pair BASE + 11. A longer flavor grows its block: rows are
-  inserted above the block's last (thick-bordered) row, styled like the rows
-  two above so the grey banding carries on, and everything below moves down.
-  The page is set to fit-to-page, so it still prints on one sheet.
-- **More than four flavors.** Each further four go on a copy of the pristine
-  template sheet (copied before anything is written), titled "Flavors 5-8" etc.
-
-The template's other inputs (H3 servings per retain, F4 servings per sample,
-H4 scoop size) aren't part of the flavor sheet R&D fills today, so they're
-cleared rather than left holding the template's placeholder numbers.
-
-openpyxl writes formulas without cached results, so the workbook is flagged to
-recalculate on open; a preview that doesn't calculate (some mobile viewers)
-shows the g column blank. The app shows its own grams for exactly that reason.
-
-This module needs openpyxl; the ETL never imports it, so the pipeline stays
-stdlib-only.
+Fill, never regenerate: copy the template, write inputs into known cells
+(docs/phase_f_templates_layout.md §2), keep every style. The g column gets the
+template's own formula so Excel does the arithmetic. A flavor longer than its
+slot grows the block with inserted rows; every four flavors past the first
+four go on a copy of the template sheet. Needs openpyxl; the ETL never imports it.
 """
 
 from __future__ import annotations
@@ -72,8 +46,7 @@ def render(
     flavors: list[Flavor],
     template_path: Path | str = DEFAULT_TEMPLATE_PATH,
 ) -> bytes:
-    """Return the filled workbook as .xlsx bytes (for a download button or a
-    file write — the caller decides where it goes)."""
+    """Return the filled workbook as .xlsx bytes, four flavors per page."""
     wb = load_workbook(template_path)
     template = wb.worksheets[0]
 
@@ -97,6 +70,8 @@ def render(
 
 
 def _fill_page(ws: Worksheet, product_line: str, servings: float | None, page: list[Flavor]) -> None:
+    """Fill one page: the header cells, then the top and bottom pairs of flavor slots."""
+    # H3/F4/H4 aren't part of the sheet R&D fills today; clear the template's placeholders.
     ws["A3"] = f"Product Name: {product_line}"
     ws["F3"] = servings
     ws["H3"] = None
@@ -119,11 +94,12 @@ def _fill_page(ws: Worksheet, product_line: str, servings: float | None, page: l
 
 
 def _rows_needed(pair: list[Flavor]) -> int:
-    """Rows a block must hold: BASE plus the longer flavor's lines."""
+    """Return the rows a block must hold: BASE plus the longer flavor's lines."""
     return 1 + max((len(f.lines) for f in pair), default=0)
 
 
 def _fill_block(ws: Worksheet, title_row: int, first_row: int, last_row: int, pair: list[Flavor]) -> None:
+    """Clear a block's example data and write up to two flavors side by side."""
     for slot, (name_col, mg_col, g_col, title_col) in enumerate(SLOT_COLUMNS):
         # Clear the template's example data. The BASE label (first row, name
         # column) is static template text and stays.
@@ -145,9 +121,7 @@ def _fill_block(ws: Worksheet, title_row: int, first_row: int, last_row: int, pa
 
 
 def _write_amount(ws: Worksheet, mg_col: str, g_col: str, row: int, mg: float | None) -> None:
-    """mg as a number and g as the template's formula. A blank mg leaves both
-    blank: a formula over an empty cell would print 0.000 g — a weigh-up
-    nobody specified."""
+    """Write mg and the g formula for one row; a blank mg leaves both blank rather than print 0.000 g."""
     if mg is None:
         return
     ws[f"{mg_col}{row}"] = mg
@@ -157,12 +131,11 @@ def _write_amount(ws: Worksheet, mg_col: str, g_col: str, row: int, mg: float | 
 
 
 def _grow(ws: Worksheet, before: int, count: int) -> None:
-    """Insert `count` rows above row `before` (a block's last row).
+    """Insert `count` styled rows above row `before` (a block's last row), keeping the banding.
 
-    openpyxl's insert_rows moves cells but not merged ranges or row heights,
-    so both are shifted here. New rows take the style of the row two above
-    (keeps the alternating banding), and the block's last row takes its fill
-    from two above as well, so the banding doesn't double up at the seam."""
+    openpyxl's insert_rows moves neither merged ranges nor row heights, so both
+    are shifted here.
+    """
     heights = {
         r: ws.row_dimensions[r].height
         for r in range(before, ws.max_row + 1)

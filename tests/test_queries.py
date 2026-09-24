@@ -38,27 +38,19 @@ from dtf_materials.sources.base import EXPECTED_HEADERS, InventorySource, RawRow
 
 
 class ListSource(InventorySource):
-    """An in-memory source, so a test can hand the ETL an exact sheet.
-
-    Same shape as the one in tests/test_etl.py. Kept local rather than shared:
-    tests/test_lab_samples.py sets the precedent of a module owning its own
-    helpers, and two copies of six lines is not yet worth a conftest.
-    """
+    """An in-memory source, so a test can hand the ETL an exact sheet."""
 
     def __init__(self, rows: list[RawRow]):
+        """Hold the rows to yield."""
         self._rows = rows
 
     def rows(self) -> Iterator[RawRow]:
+        """Yield the held rows in order."""
         yield from self._rows
 
 
 def _row(**overrides) -> RawRow:
-    """One raw sheet row, blank except for the overrides.
-
-    Keyed by the sheet's own header names, exactly as CsvInventorySource would
-    hand them over — so every row here goes through the same staging, cleaning
-    and load path the real sheet does.
-    """
+    """Return one raw sheet row keyed by the real headers, blank except for the overrides."""
     row = {header: "" for header in EXPECTED_HEADERS}
     unknown = set(overrides) - set(EXPECTED_HEADERS)
     assert not unknown, f"not columns on the real sheet: {sorted(unknown)}"
@@ -149,8 +141,7 @@ SHEET_ROWS: list[RawRow] = [
 
 @pytest.fixture
 def conn(tmp_path):
-    """The sheet above, loaded into a throwaway database. Never touches
-    db/materials.db."""
+    """The sheet above, loaded through the real ETL into a throwaway database."""
     db_path = tmp_path / "test_queries.db"
     etl.run(ListSource(SHEET_ROWS), db_path)
     connection = connect(db_path)
@@ -159,6 +150,7 @@ def conn(tmp_path):
 
 
 def material_id(conn, part_num: str) -> int:
+    """Return the material_id loaded for a part number."""
     row = conn.execute(
         "SELECT material_id FROM materials WHERE dtf_part_num = ?", (part_num,)
     ).fetchone()
@@ -167,6 +159,7 @@ def material_id(conn, part_num: str) -> int:
 
 
 def part_nums(rows) -> set[str]:
+    """Return the set of part numbers in query results."""
     return {r["dtf_part_num"] for r in rows}
 
 
@@ -415,22 +408,20 @@ LAB_ROWS: list[dict[str, str]] = [
 
 
 def _lab_values(rows: list[dict[str, str]]) -> list[list[str]]:
-    """The lab sheet as the Sheets API hands it over: header row, then one
-    list of cells per row, blank where the sheet is blank."""
+    """Return lab rows as the Sheets API hands them over: a header row, then lists of cells."""
     header = lab_samples.EXPECTED_LAB_HEADERS
     return [header] + [[row.get(h, "") for h in header] for row in rows]
 
 
 @pytest.fixture
 def linked_conn(tmp_path, monkeypatch):
-    """Both catalogs in one database, which is the only state the combined
-    search says anything about."""
+    """A database holding both catalogs, for the combined search."""
     db_path = tmp_path / "test_combined.db"
     etl.run(ListSource(LINK_SHEET_ROWS), db_path)
     monkeypatch.setattr(lab_samples, "_fetch_values", lambda cfg: _lab_values(LAB_ROWS))
     lab_samples.load_lab_samples(
         SheetConfig(sheet_id="fake", tab_name="fake",
-                       service_account_key_path=tmp_path / "key.json"),
+                    service_account_key_path=tmp_path / "key.json"),
         db_path,
     )
     connection = connect(db_path)
@@ -439,6 +430,7 @@ def linked_conn(tmp_path, monkeypatch):
 
 
 def kinds(results) -> list[str]:
+    """Return each combined-search result's kind, in order."""
     return [r["kind"] for r in results]
 
 

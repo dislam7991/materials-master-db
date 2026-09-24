@@ -1,9 +1,6 @@
-"""Shared plumbing for opening a Google Sheet tab via a service account.
+"""Opens a Google Sheet tab via a service account, for both Sheets-backed loaders.
 
-Used by both Sheets-backed readers (the main inventory and the lab sample
-catalog) so the connection and error-handling logic exists exactly once.
-Only ever imported by modules that already require gspread — never by the
-default CSV path, so it costs nothing when Sheets access isn't in use.
+Imported only where gspread is already required, never by the CSV path.
 """
 
 from __future__ import annotations
@@ -17,13 +14,11 @@ _SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
 
 class SheetAccessError(Exception):
-    """Could not open the configured sheet or tab — bad sheet_id, wrong tab
-    name, or the sheet isn't shared with the service account."""
+    """Could not open the sheet or tab: bad sheet_id, wrong tab name, or not shared with the service account."""
 
 
 def open_worksheet(sheet_id: str, tab_name: str, service_account_key_path: Path):
-    """Authenticate and return the gspread Worksheet for one tab, or raise
-    SheetAccessError with a message naming the likely fix."""
+    """Return the gspread Worksheet for one tab, or raise SheetAccessError naming the likely fix."""
     creds = Credentials.from_service_account_file(
         str(service_account_key_path), scopes=_SCOPES
     )

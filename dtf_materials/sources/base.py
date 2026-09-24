@@ -19,17 +19,7 @@ _WS_BETWEEN_PARENS = re.compile(r"\)\s+\(")
 
 
 def normalize_header_name(name: str) -> str:
-    """Collapse cosmetic whitespace a human typing a header cell adds
-    without meaning anything different: "Lot / Batch" and "Lot/Batch" are
-    the same column, so are "Category (1 Raw) (2 Flavor)" and "Category (1
-    Raw)(2 Flavor)", or a plain trailing space. Confirmed against a real
-    company sheet, whose header row had all three variants. Only touches
-    whitespace around punctuation — never alters the words themselves, so
-    it can't make two genuinely different columns collide.
-
-    Shared by every Sheets-backed source (the main inventory and the lab
-    sample catalog), pure stdlib so it costs the CSV-only default path
-    nothing to have available."""
+    """Return a header with cosmetic whitespace removed ("Lot / Batch" -> "Lot/Batch"); words are never changed."""
     name = name.strip()
     name = _WS_AROUND_SLASH.sub("/", name)
     name = _WS_BETWEEN_PARENS.sub(")(", name)
@@ -39,34 +29,12 @@ def normalize_header_name(name: str) -> str:
 def rows_from_values(
     values: list[list[str]], expected_headers: list[str], header_error: type[Exception]
 ) -> Iterator[RawRow]:
-    """Normalize a Sheets tab's header row and yield one dict per data row.
+    """Yield one {header: cell} dict per data row of a Sheets tab, after checking its header row.
 
-    Header cells are whitespace-normalized (see normalize_header_name)
-    before anything else, so the dict keys built here — and therefore every
-    downstream `row.get("...")` — line up with `expected_headers` regardless
-    of which cosmetic spacing variant the real sheet happens to use.
-
-    Raises `header_error(...)` if any name in `expected_headers` is missing
-    after normalization — order and extra columns are fine, since rows are
-    matched by header name, not position. A row shorter than the header
-    (gspread already pads these, but this contract shouldn't depend on
-    that) just yields fewer keys; callers already treat a missing key the
-    same as a blank cell.
-
-    Also raises if a name in `expected_headers` appears *twice*. The dict
-    built below keeps whichever column comes last, so a duplicated name
-    means the value a caller reads is decided by column order rather than
-    by meaning — and the losing column is silently discarded. That is worse
-    than a missing column, because nothing looks wrong downstream: a
-    mislabeled column titled "Vendor" but filled with lab locations would
-    quietly become every row's vendor. Only *expected* names are checked;
-    real sheets carry several blank and unnamed trailing columns (the
-    company inventory sheet has three), which collide on the key `""` that
-    nothing reads.
-
-    Shared by every Sheets-backed source so this logic is written and
-    tested exactly once, each caller only supplies its own header list and
-    its own exception type."""
+    Raises `header_error` if an expected header is missing or appears twice: a
+    duplicate would silently pick whichever column comes last. Extra and
+    unnamed columns are fine.
+    """
     if not values:
         return
     raw_header, *data_rows = values
@@ -102,8 +70,7 @@ EXPECTED_HEADERS = [
 
 
 class InventorySource(ABC):
-    """Yields raw inventory rows. Implementations know nothing about SQLite,
-    cleaning rules, or the schema — they only know how to fetch rows."""
+    """A source of raw inventory rows; it knows nothing about cleaning or the schema."""
 
     @abstractmethod
     def rows(self) -> Iterator[RawRow]:

@@ -38,12 +38,14 @@ SYNTHETIC_CSV = PROJECT_ROOT / "data" / "synthetic" / "raw_material_inventory.cs
 
 @pytest.fixture
 def conn(tmp_path):
+    """A connection to a fresh, empty database."""
     c = init_db(tmp_path / "test.db")
     yield c
     c.close()
 
 
 def _seed_material(conn, name="Citric Acid", part_num="DTF-100"):
+    """Insert a warehouse material and return its id."""
     cur = conn.execute(
         "INSERT INTO materials (dtf_part_num, material_name) VALUES (?,?)", (part_num, name)
     )
@@ -52,6 +54,7 @@ def _seed_material(conn, name="Citric Acid", part_num="DTF-100"):
 
 
 def _seed_lab_sample(conn, rd_id="RD-0001", flavor="Peach", code="E00000001"):
+    """Insert a lab sample and return its RD-ID."""
     conn.execute(
         "INSERT INTO lab_samples (rd_id, flavor_name, sample_code) VALUES (?,?,?)",
         (rd_id, flavor, code),
@@ -235,10 +238,11 @@ THIN, MEDIUM = Side(style="thin"), Side(style="medium")
 
 @pytest.fixture
 def template(tmp_path):
-    """A synthetic workbook with the real template's shape: header cells, two
-    blocks of two slots (BASE + 12 rows top, BASE + 11 bottom), banding, thick
-    bottom borders on each block's last row, the g formula on the first eight
-    rows of each slot, and example data in the cells a fill must clear."""
+    """A synthetic workbook shaped like the real Flavor Sheet template, example data included.
+
+    Two blocks of two slots (BASE + 12 rows top, BASE + 11 bottom), banding,
+    thick bottom borders, and the g formula on the first eight rows of each slot.
+    """
     wb = Workbook()
     ws = wb.active
     ws.title = "Sheet1"
@@ -279,6 +283,7 @@ def template(tmp_path):
 
 
 def _open(data: bytes):
+    """Load rendered .xlsx bytes as a workbook."""
     return load_workbook(BytesIO(data))
 
 
