@@ -177,14 +177,63 @@ done. The three real templates were received 2026-09-21 and are mapped in
       DoD: `pytest` fills a synthetic `.docx` of the real shape; the ETL still
       imports no docx library. **Blocked until** `Sample Labels Blank.docx`
       is in `data/real/templates/`.
-- **You, not the automation (2026-09-23):** enlarge the template's "Flavor
-  System and Excipients" section (≈20 rows; extend J49 and F50:H50 to cover
-  them) and restore the formula in F12:F18 (layout map §1, findings 1 and 5).
-  Flavor profile + excipients sometimes exceed 12 lines. Also drop into
-  `data/real/templates/`: one real manager-built record sheet, and one PL Cost
-  Sheet formula table pasted into `pl_cost_paste.txt` (header row included).
-  Open `Sample Labels Blank.doc` in Word and Save As `Sample Labels
-  Blank.docx` alongside it (unblocks F4).
+- **You, not the automation (updated 2026-09-24):** open `Sample Labels
+  Blank.doc` in Word and Save As `Sample Labels Blank.docx` alongside it
+  (unblocks F4). For F2f when it's unparked: one PL Cost Sheet formula table
+  pasted into `data/real/templates/pl_cost_paste.txt` (header row included).
+  The manager-built record sheet arrived 2026-09-24
+  (`Sample_Record_Sheet_Template_Filled.xlsx`, layout map §1). The template
+  is **not** to be enlarged or "fixed" by hand any more — the typed F values
+  are the PL Cost Sheet paste, on purpose, and F2i grows the section per sheet.
+- [ ] **F2i. Fill the flavor lines into an uploaded record sheet** (user's
+      workflow, 2026-09-24 — layout map §1, "A filled manager sheet"). The
+      manager downloads a copy of the record sheet from OneDrive, pastes the
+      actives from the PL Cost Sheet (rows 12 down) and types the excipients
+      (usually 1–2 lines); the app does the rest. On the Sample Record Sheet
+      tab: upload that `.xlsx`, pick a flavor profile, download **the same
+      workbook** with the profile's lines written into the "Flavor System and
+      Excipients" section, starting on the first empty row below the last
+      excipient. The uploaded copy may be modified; nothing is re-rendered
+      from the template. The tab is new and holds only this; the rest of
+      F2e's design stays parked.
+      - Per line: A = Part #, B = material name, C = the profile's mg/serving,
+        D = 1, E = 0, I = Price/kg — Part # and price resolved from the DB
+        (`record_line_catalog`), a missing price left blank and flagged. The
+        profile's BASE row is not written (BASE is the actives already there).
+      - Write only those cells in those rows. Everything above — header,
+        actives, pasted values in F, excipients — stays exactly as uploaded.
+        Scoop size and Jar/Lid are ignored.
+      - Find the section by content, not fixed rows: it starts below the
+        "Flavor System and Excipients" header and ends above the inactive
+        subtotal row. A sheet someone already grew must still work.
+      - Not enough empty rows → insert exactly the shortfall above the
+        subtotal row, with the section's F/G/H/J/K formulas and styles on the
+        new rows, and extend everything that points past them: the inactive
+        subtotal `SUM`, the totals row's `SUM`s, the `$F$<totals>` refs in H,
+        the cost panel's refs to both subtotals, the banding conditional
+        format, and the subtotal row's merge. openpyxl's `insert_rows` moves
+        none of these; the task is getting them right. Enough rows → insert
+        nothing.
+      DoD: usable in the app — upload, pick, download. `pytest` against a
+      synthetic manager sheet (actives as pasted values, two excipients):
+      lines land below the last excipient; BASE skipped; rows above byte-for-
+      byte unchanged; a blank price stays blank; a profile that overflows
+      inserts the shortfall and every range above covers the new rows; one
+      that fits inserts nothing.
+- [ ] **F2h. Snapshot at download** (moved from F4). Each download of a
+      record sheet, flavor sheet or labels stores the numbers it was rendered
+      from (prices included) with a timestamp, so a reprint after a reprice is
+      distinguishable from — and comparable to — the copy that was sent.
+      DoD: `pytest` shows a reprice between two downloads yields two
+      snapshots that differ, and the first is still retrievable.
+
+#### Parked in Phase F (user's call, 2026-09-24 — the automation skips these)
+
+Kept, not dropped: the user wants all four eventually. They were the "build
+the whole sheet in the app" path; F2i does the part that saves the most
+copy-paste first. Activity per material: the user will supply data for it
+later, likely as its own table — that feeds F2d.
+
 - [ ] **F2d. Remembered Activity / Overage per material.** Neither is in the
       source data. Store the last value used per material (Warehouse or Lab
       row, by id), pre-fill it on the next record sheet, overridable per sheet.
@@ -228,12 +277,8 @@ done. The three real templates were received 2026-09-21 and are mapped in
       `data/real/templates/` to confirm it follows the template's rows.
       DoD: usable in the app; `pytest` covers import from a synthetic manager
       sheet, flavor lines appended after its excipients, and overflow refusal.
-- [ ] **F2h. Snapshot at download** (moved from F4). Each download of a
-      record sheet, flavor sheet or labels stores the numbers it was rendered
-      from (prices included) with a timestamp, so a reprint after a reprice is
-      distinguishable from — and comparable to — the copy that was sent.
-      DoD: `pytest` shows a reprice between two downloads yields two
-      snapshots that differ, and the first is still retrievable.
+      *2026-09-24: F2i writes into the upload and grows instead of refusing —
+      revisit both rules here when this is unparked.*
 
 ### Phase G — Online and multi-user (gated: do not start unprompted)
 

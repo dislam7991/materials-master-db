@@ -27,6 +27,15 @@ renderer must not write it; **Static**: template text, never touched.
 Landscape, one formula per sample. Columns U:V are **hidden** and hold the
 jar dropdown source.
 
+**How a real one gets made** (user, 2026-09-24): the manager downloads a copy
+of the template from OneDrive, pastes the product's actives from the **PL Cost
+Sheet** (a Google Sheet, the source of the base formula) into B12 onward,
+F included — so F on those rows holds pasted numbers, not the formula — and
+types the excipients (usually one or two flow agents) at the top of the
+second section. The flavor profile's lines go below the last excipient; that
+last step is what the app automates (SPEC F2i). The sheet is built to be read
+by people; inconsistencies only a machine sees are expected, not defects.
+
 ### Header block
 
 | Cell | Label (col A / D) | Role | Notes |
@@ -84,14 +93,15 @@ accounting formats on money cells; `0%` on D/E/H.
 `Sheet2` is empty. `Sheet3` is a stub (`Testing`, `pH:`, `Density:` labels,
 no values) — Human, filled after lab testing if at all.
 
-### Findings (template defects — owner decides, the tool must not paper over them)
+### Findings (what a tool must know — not all are defects)
 
-1. **F12:F18 are pasted values, not formulas.** Rows 19–48 carry
-   `=IFERROR(C*(1+E)/D,0)`; the first seven active rows hold literal numbers
-   that match that formula for the example data. A renderer that writes C/D/E
-   there gets a stale F, and every cost, % and g/run downstream is wrong
-   without any visible error. Fix in the template (restore the formula), not
-   in code.
+1. **F on the actives rows is the PL Cost Sheet paste, on purpose.** The
+   template's F12:F18 and a filled sheet's F12:F30 hold numbers pasted with
+   the rest of the row; the formula `=IFERROR(C*(1+E)/D,0)` survives only on
+   the rows nobody pasted over. Don't restore it and don't "correct" pasted
+   values — the PL Cost Sheet is the source. A tool never writes F on the
+   actives rows, and never assumes F = C·(1+E)/D there (one real row is ~0.4 %
+   off).
 2. **Formula % divides label claim by total actual input.** `H = C / F50`
    mixes pre-overage mg with post-overage mg; the cached H50 in the template
    is **56.65%**, not 100%. Probably meant `F / F50`.
@@ -101,13 +111,17 @@ no values) — Human, filled after lab testing if at all.
 4. **A blank Price/kg costs $0, silently.** The example's flavor lines have
    no price; `J` treats blank I as 0 and the total looks complete. The DB
    side must leave the cell blank and flag it, never write 0.
-5. **Fixed capacity.** 23 active + 12 excipient lines. Inserting rows breaks
-   the `SUM` ranges and banding; the renderer must refuse a formula that
-   doesn't fit rather than grow the sheet.
+5. **Capacity is per sheet, not fixed** (changed 2026-09-24). The template
+   has 23 active + 12 excipient/flavor lines; when a profile doesn't fit, F2i
+   inserts the shortfall above the inactive subtotal row. openpyxl's
+   `insert_rows` shifts cells only — the subtotal and totals `SUM`s, the
+   `$F$50` refs in H, M5/N5's refs to J35/J49, the banding range and the
+   A49:I49 merge must be moved by hand. (The F2c renderer still refuses to
+   grow; it renders from the template and is not the path managers use.)
 6. **The "blank" template isn't blank** — it carries a full example formula
-   (header, 16 lines, prices). The renderer must clear A:E and I on rows
-   12–34 / 37–48 and the header inputs before writing, or be given a truly
-   empty copy.
+   (header, 16 lines, prices). Matters only when rendering from the template
+   (F2c): clear A:E and I on rows 12–34 / 37–48 and the header inputs first.
+   F2i writes into the manager's own sheet and clears nothing.
 
 ### A filled manager sheet vs. the template (2026-09-24)
 
@@ -128,30 +142,32 @@ structure only; none of its content is reproduced here.
 - Header inputs sit in the mapped cells: B3:B7, E4, E5, H9. Sample code
   confirms `<prefix>YYMMDD-NN`; Quote ID confirms `<prefix>-MMDDYY` — the
   prefix length differs from the template's example, so don't assume one.
-- Used 19 of 23 active lines (12–30) and 7 of 12 excipient lines (37–43),
-  packed from the top with no gaps. Every used line has a Part Number and a
-  Price/kg; every excipient is Activity 1 / Overage 0.
+- Used 19 of 23 active lines (12–30) and 7 of 12 lines in the second section
+  (37–43: the excipients, then the flavor lines), packed from the top with no
+  gaps. Every used line has a Part Number and a Price/kg; every line in the
+  second section is Activity 1 / Overage 0.
 
 **Differences:**
 
 | Where | Template | Filled | Consequence |
 |---|---|---|---|
-| F19:F30 | `=IFERROR(C*(1+E)/D,0)` | **literal numbers** | finding 1 has spread: F12:F30 are now all values, only F31:F34 and F37:F48 still calculate. F12:F29 match the formula (F27 only to rounding); **F30 is stale** — ~0.4 % off its own C/D/E. |
-| E3 (Scoop Size) | example text | **empty** | scoop typed as free text in **G3** instead — a cell outside the merged input, next to the E3:F3 box. |
-| E6 (Jar/Lid) | one of the two list values | **empty** | P5 caches the prompt string, so Q5 caches `Missing Data`: the sheet as saved has **no total cost/unit**. |
+| F19:F30 | `=IFERROR(C*(1+E)/D,0)` | **literal numbers** | the PL Cost Sheet paste (finding 1): F12:F30 are all values, F31:F34 and F37:F48 still calculate. F30 is ~0.4 % off C·(1+E)/D — the source's number, left as is. |
+| E3 (Scoop Size) | example text | **empty** | scoop typed as free text in **G3** instead. Ignored for now (user, 2026-09-24). |
+| E6 (Jar/Lid) | one of the two list values | **empty** | P5 caches the prompt string, so Q5 caches `Missing Data`. Ignored for now (user, 2026-09-24). |
 | H50 (cached) | 56.65 % | ≈98 % | finding 2 still live with real data — Formula % doesn't sum to 100 %. |
 | G12:G28, G37 | grey fill | accent fill | manual highlight on g/run. Cosmetic. |
 | B24 / B33 | 12 pt / wrap | 11 pt + wrap / no wrap | cosmetic. |
 
-**What this means for the import (F2g):**
+**What this means for filling the flavor lines (SPEC F2i):**
 
-- Reading lines by fixed rows (12–34, 37–48) works on a real sheet; stop at
-  the first row with no Raw Material in each section.
-- **Never read F.** Recompute from C/D/E — F is a mix of formula and pasted,
-  possibly stale values.
-- Scoop size: read E3; when it's blank and G3 has text, show G3 for the user
-  to confirm rather than silently taking either.
-- A blank Jar/Lid is normal in the wild; import it as blank, don't refuse.
+- The last excipient is the last row with a Raw Material (B) in the second
+  section; flavors start on the next row. Rows 37–48 hold today, but find the
+  section by its header and subtotal rows so a sheet someone grew still works.
+- Unused rows in the section (44–48 in the filled sheet) still carry the
+  F/G/H/J/K formulas — writing A–E and I is enough there. Inserted rows need those
+  formulas copied in (finding 5).
+- Touch nothing above the section: the header, actives and pasted F values
+  are the manager's.
 
 ## 2. Flavor Sheet (`Sheet1`)
 
@@ -273,9 +289,8 @@ title). One formula object entering them once removes the triple entry.
 
 ## 6. Open questions for the template owner
 
-1. Restore the formula in record sheet F12:F18? (finding 1.1) — managers
-   paste F values further down too (F19:F30 in the filled sheet, one stale);
-   protecting column F would stop it.
+1. ~~Restore the formula in record sheet F12:F18?~~ **Answered 2026-09-24:**
+   no — F on the actives rows is the PL Cost Sheet paste (finding 1.1).
 2. Is Formula % meant to be `F/F50`? (1.2)
 3. Should flavor slots 3–4 calculate? (2.1)
 4. Is BASE mg on the flavor sheet the record sheet's total mg/serving?
@@ -285,4 +300,4 @@ title). One formula object entering them once removes the triple entry.
 8. Jar/lid prices live inside the P5 formula — who updates them, and should
    they move to cells?
 9. Scoop size: E3 or G3? The filled record sheet left E3 empty and typed it
-   in G3.
+   in G3. Parked with Jar/Lid — both ignored for now (2026-09-24).
