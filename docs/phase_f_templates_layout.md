@@ -249,6 +249,8 @@ shapes for text boxes.
   are one empty paragraph each; the gutter cells have none.
 - No mail merge, fields, content controls, form fields or images. One
   bookmark (`Blank_MP1_panel1`, left by Word's label wizard) in label 1.
+- The captions are placeholders: a filled label prints the values alone
+  (user, 2026-09-24), one label per flavor, 10 flavors per document.
 - **Fill** = copy label 1's five paragraphs into each label to be printed
   (keeping `w:pPr`/`w:rPr`) and set each run's text. The table's exact row
   heights keep the grid put however long a value is; an over-long value

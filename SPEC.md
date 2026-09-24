@@ -168,8 +168,7 @@ done. The three real templates were received 2026-09-21 and are mapped in
       three, with template defects as findings); the two spreadsheet shapes
       are rebuilt synthetically inside `tests/test_flavor_sheets.py` and
       `tests/test_sample_record.py`, so CI needs no committed template file.
-- **You, not the automation (updated 2026-09-24):** answer F4's three
-  questions before it's built. For F2f when it's unparked: one PL Cost Sheet
+- **You, not the automation (updated 2026-09-24):** for F2f when it's unparked: one PL Cost Sheet
   formula table pasted into `data/real/templates/pl_cost_paste.txt` (header
   row included). The labels template arrived as `.docx` 2026-09-24. The
   manager-built record sheet arrived 2026-09-24
@@ -211,26 +210,33 @@ done. The three real templates were received 2026-09-21 and are mapped in
       fields, a name containing a tab or newline can't shift columns.
 - [ ] **F4. Labels** (unparked 2026-09-24, user's call). Fill the labels
       template `data/real/templates/Sample Labels Blank Template.docx`
-      (layout map §3 — the text is in a 5×3 table, not the shapes). Label data,
-      all from the app: Customer, Product, Flavor and Sample ID from the flavor
-      sheet and profile; **Serving Size** = scoops per serving (typed in the
-      app, stored per product so it's entered once) + serving weight = the
-      profile's BASE mg + its flavor lines' mg, in grams (BASE typically
-      already includes the excipients). A "Download Labels" button per flavor
-      profile on the Flavor Sheet tab; `.docx` out. Fill, never regenerate:
-      copy label 1's five paragraphs into each label printed, keeping their
-      formatting; never touch the outline shapes. No docx library in the ETL.
-      **Confirm with the user before building:** (a) does a value replace the
-      caption (`Acme`) or follow it (`CUSTOMER: Acme`); (b) how many labels
-      per flavor — one, a chosen count, or all ten; (c) the Serving Size
-      wording (e.g. `2 scoops (12.3 g)`) and grams' decimals.
-      DoD: usable in the app — pick a profile, download labels, open in Word
-      and the grid still lines up with the label sheet (user confirms on a
-      test print). `pytest` fills a synthetic `.docx` of the real shape
-      (5×3 table, exact row heights, 10 outline shapes): values land in the
-      right cells, formatting and row heights unchanged, shapes untouched,
-      weight = BASE + lines in g, scoops remembered per product, a blank
-      field stays blank rather than printing `None`.
+      (layout map §3 — the text is in a 5×3 table, not the shapes) from a
+      flavor sheet: **one label per flavor profile**, in the sheet's order,
+      labels 1–10 read left-right, top-down. More than 10 flavors → more
+      documents, 10 flavors each; unused labels stay empty. A "Download
+      Labels" button on the Flavor Sheet tab, one download per document.
+      Extra copies (retain, multiple ship-to units) the user makes by hand.
+      - Five lines per label, **values only — no captions** (user,
+        2026-09-24): customer, product (flavor sheet header), flavor name,
+        sample code (profile), and serving size as `<n> scoop serving
+        (<g> g)`, e.g. `2 scoop serving (12.3 g)`.
+      - `<n>` = scoops per serving, typed in the app and stored per product so
+        it's entered once; a whole number prints without decimals. `<g>` = the
+        profile's BASE mg + its flavor lines' mg, in grams, **1 decimal,
+        rounded half-up** (not Python's `round`, which rounds 0.05 to even).
+        BASE typically already includes the excipients. Water volume, when
+        needed, the user adds by hand.
+      - Fill, never regenerate: copy label 1's five paragraphs into each
+        label used, keeping `w:pPr`/`w:rPr`, and set the run text; never
+        touch the outline shapes. `.docx` out. No docx library in the ETL.
+      DoD: usable in the app — download labels for a flavor sheet, open in
+      Word, and the grid lines up with the label stock (user confirms on a
+      test print). `pytest` fills a synthetic `.docx` of the real shape (5×3
+      table, exact row heights, 10 outline shapes): one label per profile in
+      order, no captions, 11 flavors → two documents (10 + 1), formatting and
+      row heights unchanged, shapes untouched, grams half-up to 1 decimal,
+      scoops remembered per product, a blank field prints empty, never
+      `None`.
 - [ ] **F2h. Snapshot at download** (moved from F4; narrowed 2026-09-24 —
       the record sheet has no download any more, and the app can't see a
       copy). Each download of a flavor sheet or of labels (F4) stores the
