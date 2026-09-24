@@ -184,42 +184,40 @@ done. The three real templates were received 2026-09-21 and are mapped in
   The manager-built record sheet arrived 2026-09-24
   (`Sample_Record_Sheet_Template_Filled.xlsx`, layout map §1). The template
   is **not** to be enlarged or "fixed" by hand any more — the typed F values
-  are the PL Cost Sheet paste, on purpose, and F2i grows the section per sheet.
-- [ ] **F2i. Fill the flavor lines into an uploaded record sheet** (user's
-      workflow, 2026-09-24 — layout map §1, "A filled manager sheet"). The
-      manager downloads a copy of the record sheet from OneDrive, pastes the
-      actives from the PL Cost Sheet (rows 12 down) and types the excipients
-      (usually 1–2 lines); the app does the rest. On the Sample Record Sheet
-      tab: upload that `.xlsx`, pick a flavor profile, download **the same
-      workbook** with the profile's lines written into the "Flavor System and
-      Excipients" section, starting on the first empty row below the last
-      excipient. The uploaded copy may be modified; nothing is re-rendered
-      from the template. The tab is new and holds only this; the rest of
-      F2e's design stays parked.
-      - Per line: A = Part #, B = material name, C = the profile's mg/serving,
-        D = 1, E = 0, I = Price/kg — Part # and price resolved from the DB
-        (`record_line_catalog`), a missing price left blank and flagged. The
-        profile's BASE row is not written (BASE is the actives already there).
-      - Write only those cells in those rows. Everything above — header,
-        actives, pasted values in F, excipients — stays exactly as uploaded.
-        Scoop size and Jar/Lid are ignored.
-      - Find the section by content, not fixed rows: it starts below the
-        "Flavor System and Excipients" header and ends above the inactive
-        subtotal row. A sheet someone already grew must still work.
-      - Not enough empty rows → insert exactly the shortfall above the
-        subtotal row, with the section's F/G/H/J/K formulas and styles on the
-        new rows, and extend everything that points past them: the inactive
-        subtotal `SUM`, the totals row's `SUM`s, the `$F$<totals>` refs in H,
-        the cost panel's refs to both subtotals, the banding conditional
-        format, and the subtotal row's merge. openpyxl's `insert_rows` moves
-        none of these; the task is getting them right. Enough rows → insert
-        nothing.
-      DoD: usable in the app — upload, pick, download. `pytest` against a
-      synthetic manager sheet (actives as pasted values, two excipients):
-      lines land below the last excipient; BASE skipped; rows above byte-for-
-      byte unchanged; a blank price stays blank; a profile that overflows
-      inserts the shortfall and every range above covers the new rows; one
-      that fits inserts nothing.
+  are the PL Cost Sheet paste, on purpose. When a flavor profile doesn't fit,
+  insert rows in Excel (it extends the ranges itself) before pasting F2i's
+  block.
+- [ ] **F2i. Flavor lines as a copy block** (user's workflow and call,
+      2026-09-24 — layout map §1, "A filled manager sheet"). The manager
+      downloads the record sheet from OneDrive, pastes the actives from the PL
+      Cost Sheet and types the excipients; the flavor lines are the part the
+      app saves typing on. The app **never opens or writes the manager's
+      file** — openpyxl would change it on save (layout §4) and can't grow the
+      section safely (finding 5); Excel does both correctly when the user
+      inserts rows. On a Sample Record Sheet tab (new; holds only this — the
+      rest of F2e's design stays parked): pick a flavor profile, get its lines
+      as tab-separated text with a copy button, pasted by the user into column
+      A of the first empty row below the last excipient, spreading over A:I.
+      - One row per profile line, BASE excluded (BASE is the actives already on
+        the sheet). Columns: A Part # (blank if none), B material name,
+        C label claim = the profile's mg/serving, D `1` (Activity 100 %),
+        E `0` (Overage), F = C (Actual Input, a value), G and H empty (the user
+        fills g/run and Formula % down from the excipient row), I Price/kg.
+        No header row. J/K are not in the block.
+      - Part # and Price/kg resolved from the DB (`record_line_catalog`),
+        never copied into the profile; a missing price is an empty field,
+        flagged beside the block, never 0.
+      - Show the line count, so the user knows how many rows to insert first
+        when the section is short.
+      - Part numbers that Excel would reformat on paste (all digits with
+        leading zeros) must survive — check the real `dtf_part_num` shapes
+        before choosing how.
+      - Scoop size and Jar/Lid are not involved.
+      DoD: usable in the app — pick a profile, copy, paste into the real
+      template in Excel lands in the right columns (user confirms). `pytest`
+      on the block builder with synthetic profiles: column order and count,
+      BASE skipped, D/E/F defaults, blank Part # and blank price stay empty
+      fields, a name containing a tab or newline can't shift columns.
 - [ ] **F2h. Snapshot at download** (moved from F4). Each download of a
       record sheet, flavor sheet or labels stores the numbers it was rendered
       from (prices included) with a timestamp, so a reprint after a reprice is
@@ -277,8 +275,9 @@ later, likely as its own table — that feeds F2d.
       `data/real/templates/` to confirm it follows the template's rows.
       DoD: usable in the app; `pytest` covers import from a synthetic manager
       sheet, flavor lines appended after its excipients, and overflow refusal.
-      *2026-09-24: F2i writes into the upload and grows instead of refusing —
-      revisit both rules here when this is unparked.*
+      *2026-09-24: F2i chose a copy block over writing into the manager's
+      file, partly because openpyxl alters a workbook it saves — weigh that
+      here too when this is unparked.*
 
 ### Phase G — Online and multi-user (gated: do not start unprompted)
 

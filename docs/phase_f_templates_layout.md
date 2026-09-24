@@ -33,8 +33,9 @@ Sheet** (a Google Sheet, the source of the base formula) into B12 onward,
 F included — so F on those rows holds pasted numbers, not the formula — and
 types the excipients (usually one or two flow agents) at the top of the
 second section. The flavor profile's lines go below the last excipient; that
-last step is what the app automates (SPEC F2i). The sheet is built to be read
-by people; inconsistencies only a machine sees are expected, not defects.
+last step is what the app helps with (SPEC F2i: a copy block the user
+pastes). The sheet is built to be read by people; inconsistencies only a
+machine sees are expected, not defects.
 
 ### Header block
 
@@ -112,16 +113,16 @@ no values) — Human, filled after lab testing if at all.
    no price; `J` treats blank I as 0 and the total looks complete. The DB
    side must leave the cell blank and flag it, never write 0.
 5. **Capacity is per sheet, not fixed** (changed 2026-09-24). The template
-   has 23 active + 12 excipient/flavor lines; when a profile doesn't fit, F2i
-   inserts the shortfall above the inactive subtotal row. openpyxl's
-   `insert_rows` shifts cells only — the subtotal and totals `SUM`s, the
-   `$F$50` refs in H, M5/N5's refs to J35/J49, the banding range and the
-   A49:I49 merge must be moved by hand. (The F2c renderer still refuses to
-   grow; it renders from the template and is not the path managers use.)
+   has 23 active + 12 excipient/flavor lines; a sheet that needs more gets
+   rows inserted **by the user in Excel**, which extends the subtotal and
+   totals `SUM`s, the banding and the merge itself. A tool must not do it
+   with openpyxl: `insert_rows` shifts cells only, leaving every range, the
+   `$F$50` refs in H and M5/N5's refs to J35/J49 pointing at the old rows.
+   (The F2c renderer refuses to grow for the same reason.)
 6. **The "blank" template isn't blank** — it carries a full example formula
    (header, 16 lines, prices). Matters only when rendering from the template
    (F2c): clear A:E and I on rows 12–34 / 37–48 and the header inputs first.
-   F2i writes into the manager's own sheet and clears nothing.
+   F2i never touches a workbook.
 
 ### A filled manager sheet vs. the template (2026-09-24)
 
@@ -158,16 +159,17 @@ structure only; none of its content is reproduced here.
 | G12:G28, G37 | grey fill | accent fill | manual highlight on g/run. Cosmetic. |
 | B24 / B33 | 12 pt / wrap | 11 pt + wrap / no wrap | cosmetic. |
 
-**What this means for filling the flavor lines (SPEC F2i):**
+**What this means for the flavor copy block (SPEC F2i):**
 
-- The last excipient is the last row with a Raw Material (B) in the second
-  section; flavors start on the next row. Rows 37–48 hold today, but find the
-  section by its header and subtotal rows so a sheet someone grew still works.
-- Unused rows in the section (44–48 in the filled sheet) still carry the
-  F/G/H/J/K formulas — writing A–E and I is enough there. Inserted rows need those
-  formulas copied in (finding 5).
-- Touch nothing above the section: the header, actives and pasted F values
-  are the manager's.
+- The block lands in the second section starting on the row after the last
+  excipient, columns A:I. Real sheets pack lines from the top, so that's the
+  first row with an empty Raw Material (B).
+- The empty rows of the section (44–48 in the filled sheet) already carry the
+  F/G/H/J/K formulas. The block's F is a value (= C) and G/H are empty, so a
+  paste replaces those three; the user fills G and H down from the excipient
+  row afterwards, and J/K too on any rows they inserted. J/K are outside the
+  block, so on existing rows they keep calculating.
+- Paste as values (Ctrl+Shift+V) to keep the row banding.
 
 ## 2. Flavor Sheet (`Sheet1`)
 
