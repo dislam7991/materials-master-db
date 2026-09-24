@@ -159,7 +159,8 @@ done. The three real templates were received 2026-09-21 and are mapped in
       against a synthetic template of the real shape (CI installs openpyxl).
 - [x] **F2c. Sample Record Sheet** — next deliverable, same approach: work
       backwards from the template (layout map §1), reuse the flavor profiles.
-      Renderer only (`sample_record_xlsx.py`); no UI — F2d–F2g make it usable.
+      Renderer only (`sample_record_xlsx.py`); no UI. It stays unused while
+      F2d–F2g are parked — managers build the sheet themselves (F2i).
 - [x] **F3. Reverse-engineer the three real templates** (flavor sheet, sample
       record sheet, labels) — which cells are inputs, which are formulas, what
       the autocalc computes, which inputs the DB supplies vs. a human types.
@@ -497,6 +498,11 @@ there's no way to know it helped.
 - **Fill the template, never regenerate it.** "Copied exactly" is the
   requirement: copy the `.xlsx`, write into known cells, save as new. Rebuilt
   layout drifts from the company form the first time someone nudges a border.
+  *Exception (user's call, 2026-09-24): the Sample Record Sheet.* The manager
+  builds it by hand from the PL Cost Sheet, so the app hands over a copy
+  block for its flavor lines (F2i) instead of filling a file. The block puts
+  a value in F over the section's formula; identical while flavor lines are
+  Activity 1 / Overage 0, stale if someone edits D/E on those rows after.
 - **Leave the autocalc fields alone** — write inputs, let the sheet's formulas
   produce outputs; two copies of a trusted calculation is a support call.
   Consequence: openpyxl doesn't evaluate formulas, so any computed value the
