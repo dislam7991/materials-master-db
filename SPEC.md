@@ -220,8 +220,10 @@ done. The three real templates were received 2026-09-21 and are mapped in
         2026-09-24): customer, product (flavor sheet header), flavor name,
         sample code (profile), and serving size as `<n> scoop serving
         (<g> g)`, e.g. `2 scoop serving (12.3 g)`.
-      - `<n>` = scoops per serving, typed in the app and stored per product so
-        it's entered once; a whole number prints without decimals. `<g>` = the
+      - `<n>` = scoops per serving, a field in the app **pre-filled with 1**
+        (most products, user 2026-09-24) and stored per product, so a
+        product that differs is changed once and remembered; a whole number
+        prints without decimals. `<g>` = the
         profile's BASE mg + its flavor lines' mg, in grams, **1 decimal,
         rounded half-up** (not Python's `round`, which rounds 0.05 to even).
         BASE typically already includes the excipients. Water volume, when
@@ -235,7 +237,8 @@ done. The three real templates were received 2026-09-21 and are mapped in
       table, exact row heights, 10 outline shapes): one label per profile in
       order, no captions, 11 flavors → two documents (10 + 1), formatting and
       row heights unchanged, shapes untouched, grams half-up to 1 decimal,
-      scoops remembered per product, a blank field prints empty, never
+      a new product defaults to 1 scoop, a changed count is remembered per
+      product, a blank field prints empty, never
       `None`.
 - [ ] **F2h. Snapshot at download** (moved from F4; narrowed 2026-09-24 —
       the record sheet has no download any more, and the app can't see a
