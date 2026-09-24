@@ -1,25 +1,15 @@
 """ETL pipeline: source rows -> staging_inventory_raw -> typed tables.
 
-This is a full-reload pipeline: each run clears staging + the derived tables
-and rebuilds them from the source. That's the right tradeoff for a low-volume
-sheet (hundreds of rows, run on demand or nightly) and it sidesteps a whole
-class of "did this lot already get loaded" bugs. An incremental version
-(load only rows newer than the last run, keyed on Receiving Date + DTF Lot #)
-is a natural follow-up and a good scaling conversation for an interview:
-the tradeoff is idempotency/simplicity now vs. write volume and history
-preservation later, once the sheet is big enough for a full reload to be slow.
+Full reload, in one atomic transaction: each run clears staging and lots and
+rebuilds them from the source. Materials and suppliers are upserted instead,
+so their ids stay stable across runs.
 
-Two passes over staging:
-  1. Group rows by DTF Part # -> upsert one canonical `materials` row per
-     part #. First row wins for name/category/supplier/allergen; later rows
-     with the same part # but different material_name are logged as
-     conflicts (data quality issue) but still get their lot attached to the
-     existing material, because DTF Part # is the identity that matters.
-  2. Every row that resolved to a material gets one `lots` row, plus parsed
-     `lot_locations` rows. Rows with no DTF Part # can't be tied to a
-     material at all and are skipped from lots/materials — that's a real
-     gap in the source (a receiving with no assigned Part #), not something
-     the ETL should paper over by guessing.
+Rows are grouped by DTF Part #. The first row for a part number supplies the
+material's name/category/supplier/allergen; a later row with a different name
+counts as a conflict for the quality report but still gets its lot attached.
+Rows with no DTF Part # are skipped, not guessed at.
+
+Run with:  python -m dtf_materials.etl [csv_path] [--source sheets] [--db PATH]
 """
 
 from __future__ import annotations
@@ -34,9 +24,32 @@ from .db import DEFAULT_DB_PATH, init_db
 from .sources import CsvInventorySource, InventorySource
 from .sources.base import EXPECTED_HEADERS
 
+# Source header -> staging_inventory_raw column. Staging keeps every cell as raw text.
+STAGING_COLUMNS = {
+    "Receiving Date": "receiving_date",
+    "Locations": "locations",
+    "DTF Lot #": "dtf_lot_num",
+    "DTF Part #": "dtf_part_num",
+    "Status": "status",
+    "Allergen": "allergen",
+    "Material Name": "material_name",
+    "Supplier/MFG": "supplier_mfg",
+    "Lot/Batch": "lot_batch",
+    "EXP. Date": "exp_date",
+    "Start Day Stock": "start_day_stock",
+    "Current Stock": "current_stock",
+    "Filter Moving/Date": "filter_moving",
+    "Check/Cycle count": "check_cycle_count",
+    "Category (1 Raw)(2 Flavor)": "category",
+    "Price Per Kilo": "price_per_kilo",
+    "Total cost": "total_cost",
+    "Ready To Archive": "ready_to_archive",
+}
+
 
 @dataclass
 class LoadStats:
+    """Counts reported at the end of a run."""
     staged_rows: int = 0
     materials_created: int = 0
     materials_updated: int = 0
@@ -49,62 +62,35 @@ class LoadStats:
 
 
 def reset_derived_tables(conn: sqlite3.Connection) -> None:
-    """Clear the per-run tables only.
+    """Clear the tables rebuilt every run: lot_locations, lots and staging.
 
-    Deliberately does NOT delete `materials` or `suppliers`. Those are
-    upserted instead, because `material_id` is a stable identity that other
-    tables (`sample_materials`) reference: deleting and re-inserting would
-    reassign every id on each run, so merely re-sorting the source sheet
-    would silently repoint sample history at the wrong materials. Lots are
-    fully rebuilt from the source each run, which is safe because nothing
-    references `lot_id` outside `lot_locations`.
-
-    A consequence worth knowing: a material that disappears from the sheet
-    stays in the database rather than vanishing. That is the intended
-    behavior for a master table — it keeps history — and `stale_materials`
-    in the load stats reports how many were not seen this run.
+    Materials and suppliers are deliberately kept: material_id is referenced
+    from outside, so a material missing from the sheet stays (counted as stale).
     """
     for table in ["lot_locations", "lots", "staging_inventory_raw"]:
         conn.execute(f"DELETE FROM {table}")
 
 
 def stage(conn: sqlite3.Connection, source: InventorySource, stats: LoadStats) -> None:
+    """Copy every source row verbatim into staging_inventory_raw, numbered from 1."""
     rows = list(source.rows())
     if rows:
-        missing_cols = [h for h in EXPECTED_HEADERS if h not in rows[0]]
-        if missing_cols:
-            stats.header_mismatches = missing_cols
+        stats.header_mismatches = [h for h in EXPECTED_HEADERS if h not in rows[0]]
 
+    columns = ", ".join(["source_row", *STAGING_COLUMNS.values()])
+    placeholders = ", ".join("?" * (len(STAGING_COLUMNS) + 1))
+    sql = f"INSERT INTO staging_inventory_raw ({columns}) VALUES ({placeholders})"
     for i, row in enumerate(rows, start=1):
-        conn.execute(
-            """INSERT INTO staging_inventory_raw
-               (source_row, receiving_date, locations, dtf_lot_num, dtf_part_num,
-                status, allergen, material_name, supplier_mfg, lot_batch, exp_date,
-                start_day_stock, current_stock, filter_moving, check_cycle_count,
-                category, price_per_kilo, total_cost, ready_to_archive)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                i,
-                row.get("Receiving Date"), row.get("Locations"), row.get("DTF Lot #"),
-                row.get("DTF Part #"), row.get("Status"), row.get("Allergen"),
-                row.get("Material Name"), row.get("Supplier/MFG"), row.get("Lot/Batch"),
-                row.get("EXP. Date"), row.get("Start Day Stock"), row.get("Current Stock"),
-                row.get("Filter Moving/Date"), row.get("Check/Cycle count"),
-                row.get("Category (1 Raw)(2 Flavor)"), row.get("Price Per Kilo"),
-                row.get("Total cost"), row.get("Ready To Archive"),
-            ),
-        )
+        conn.execute(sql, (i, *(row.get(header) for header in STAGING_COLUMNS)))
         stats.staged_rows += 1
 
 
 def resolve_supplier(conn: sqlite3.Connection, raw_name: str | None, stats: LoadStats) -> int | None:
-    """Look up (or create) the canonical supplier for a raw spelling, via the
-    case/whitespace-insensitive alias key. Returns supplier_id, or None if
-    the cell was blank."""
+    """Return the supplier_id for a raw spelling, creating the supplier if it's new (None if blank)."""
     name = cleaning.clean_text(raw_name)
     if name is None:
         return None
-    key = cleaning.normalize_supplier_key(name)
+    key = cleaning.normalize_key(name)
 
     row = conn.execute(
         "SELECT s.supplier_id FROM supplier_aliases a "
@@ -122,94 +108,108 @@ def resolve_supplier(conn: sqlite3.Connection, raw_name: str | None, stats: Load
 
 
 def load_materials_and_lots(conn: sqlite3.Connection, stats: LoadStats) -> None:
+    """Turn each staged row into a lot under its material, upserting the material on first sight."""
     staging_rows = conn.execute(
         "SELECT * FROM staging_inventory_raw ORDER BY source_row"
     ).fetchall()
 
     material_id_by_part: dict[str, int] = {}
-
     for row in staging_rows:
         part_num = cleaning.clean_text(row["dtf_part_num"])
         if part_num is None:
             stats.rows_missing_part_num += 1
             continue
 
-        name = cleaning.clean_text(row["material_name"])
-        category = cleaning.parse_category(row["category"])
-        allergen = cleaning.clean_text(row["allergen"])
         supplier_id = resolve_supplier(conn, row["supplier_mfg"], stats)
-
         if part_num not in material_id_by_part:
-            # Upsert on the business key so material_id stays stable across runs.
-            # First row seen for a part # in THIS run supplies the canonical
-            # attributes; COALESCE keeps a previously-known value rather than
-            # overwriting it with a blank cell.
-            existing_row = conn.execute(
-                "SELECT material_id FROM materials WHERE dtf_part_num = ?", (part_num,)
-            ).fetchone()
-            conn.execute(
-                """INSERT INTO materials
-                       (dtf_part_num, material_name, supplier_id, category, allergen)
-                   VALUES (?,?,?,?,?)
-                   ON CONFLICT(dtf_part_num) DO UPDATE SET
-                       material_name = COALESCE(excluded.material_name, materials.material_name),
-                       supplier_id   = COALESCE(excluded.supplier_id,   materials.supplier_id),
-                       category      = COALESCE(excluded.category,      materials.category),
-                       allergen      = COALESCE(excluded.allergen,      materials.allergen)""",
-                (part_num, name, supplier_id, category, allergen),
-            )
-            row_id = conn.execute(
-                "SELECT material_id FROM materials WHERE dtf_part_num = ?", (part_num,)
-            ).fetchone()["material_id"]
-            material_id_by_part[part_num] = row_id
-            if existing_row is None:
-                stats.materials_created += 1
-            else:
-                stats.materials_updated += 1
-        else:
-            existing = conn.execute(
-                "SELECT material_name FROM materials WHERE material_id = ?",
-                (material_id_by_part[part_num],),
-            ).fetchone()
-            if existing and name and cleaning.normalize_key(existing["material_name"]) != cleaning.normalize_key(name):
-                stats.materials_conflicted += 1
+            material_id_by_part[part_num] = _upsert_material(conn, part_num, row, supplier_id, stats)
+        elif _name_conflicts(conn, material_id_by_part[part_num], row["material_name"]):
+            stats.materials_conflicted += 1
 
-        material_id = material_id_by_part[part_num]
-        price = cleaning.parse_price(row["price_per_kilo"])
-        cur = conn.execute(
-            """INSERT INTO lots
-               (material_id, dtf_lot_num, supplier_lot_num, receiving_date, exp_date,
-                status, start_day_stock, current_stock, price_per_kilo, total_cost,
-                locations_raw, ready_to_archive)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                material_id,
-                cleaning.clean_text(row["dtf_lot_num"]),
-                cleaning.clean_text(row["lot_batch"]),
-                cleaning.parse_date(row["receiving_date"]),
-                cleaning.parse_date(row["exp_date"]),
-                cleaning.clean_text(row["status"]),
-                cleaning.parse_float(row["start_day_stock"]),
-                cleaning.parse_float(row["current_stock"]),
-                price,
-                cleaning.parse_price(row["total_cost"]),
-                cleaning.clean_text(row["locations"]),
-                cleaning.parse_bool_flag(row["ready_to_archive"]),
-            ),
-        )
+        _insert_lot(conn, material_id_by_part[part_num], row)
         stats.lots_created += 1
-        lot_id = cur.lastrowid
 
-        for loc in cleaning.split_locations(row["locations"]):
-            conn.execute(
-                "INSERT OR IGNORE INTO lot_locations (lot_id, location) VALUES (?, ?)",
-                (lot_id, loc),
-            )
+
+def _upsert_material(
+    conn: sqlite3.Connection, part_num: str, row: sqlite3.Row, supplier_id: int | None, stats: LoadStats
+) -> int:
+    """Insert or update the material for a part number and return its stable material_id.
+
+    COALESCE keeps a previously known value rather than overwriting it with a blank cell.
+    """
+    existed = conn.execute(
+        "SELECT 1 FROM materials WHERE dtf_part_num = ?", (part_num,)
+    ).fetchone() is not None
+    conn.execute(
+        """INSERT INTO materials
+               (dtf_part_num, material_name, supplier_id, category, allergen)
+           VALUES (?,?,?,?,?)
+           ON CONFLICT(dtf_part_num) DO UPDATE SET
+               material_name = COALESCE(excluded.material_name, materials.material_name),
+               supplier_id   = COALESCE(excluded.supplier_id,   materials.supplier_id),
+               category      = COALESCE(excluded.category,      materials.category),
+               allergen      = COALESCE(excluded.allergen,      materials.allergen)""",
+        (
+            part_num,
+            cleaning.clean_text(row["material_name"]),
+            supplier_id,
+            cleaning.parse_category(row["category"]),
+            cleaning.clean_text(row["allergen"]),
+        ),
+    )
+    if existed:
+        stats.materials_updated += 1
+    else:
+        stats.materials_created += 1
+    return conn.execute(
+        "SELECT material_id FROM materials WHERE dtf_part_num = ?", (part_num,)
+    ).fetchone()["material_id"]
+
+
+def _name_conflicts(conn: sqlite3.Connection, material_id: int, raw_name: str | None) -> bool:
+    """True if a row's material name genuinely differs from the material already loaded."""
+    name = cleaning.clean_text(raw_name)
+    existing = conn.execute(
+        "SELECT material_name FROM materials WHERE material_id = ?", (material_id,)
+    ).fetchone()
+    return bool(
+        existing and name
+        and cleaning.normalize_key(existing["material_name"]) != cleaning.normalize_key(name)
+    )
+
+
+def _insert_lot(conn: sqlite3.Connection, material_id: int, row: sqlite3.Row) -> None:
+    """Insert one lot from a staged row, plus one lot_locations row per parsed location."""
+    cur = conn.execute(
+        """INSERT INTO lots
+           (material_id, dtf_lot_num, supplier_lot_num, receiving_date, exp_date,
+            status, start_day_stock, current_stock, price_per_kilo, total_cost,
+            locations_raw, ready_to_archive)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (
+            material_id,
+            cleaning.clean_text(row["dtf_lot_num"]),
+            cleaning.clean_text(row["lot_batch"]),
+            cleaning.parse_date(row["receiving_date"]),
+            cleaning.parse_date(row["exp_date"]),
+            cleaning.clean_text(row["status"]),
+            cleaning.parse_float(row["start_day_stock"]),
+            cleaning.parse_float(row["current_stock"]),
+            cleaning.parse_price(row["price_per_kilo"]),
+            cleaning.parse_price(row["total_cost"]),
+            cleaning.clean_text(row["locations"]),
+            cleaning.parse_bool_flag(row["ready_to_archive"]),
+        ),
+    )
+    for loc in cleaning.split_locations(row["locations"]):
+        conn.execute(
+            "INSERT OR IGNORE INTO lot_locations (lot_id, location) VALUES (?, ?)",
+            (cur.lastrowid, loc),
+        )
 
 
 def refresh_current_prices(conn: sqlite3.Connection) -> None:
-    """Set materials.current_price_per_kilo from each material's most recent
-    lot (by receiving_date, falling back to lot_id for undated lots)."""
+    """Set each material's current price from its most recent priced lot (undated lots count as oldest)."""
     conn.execute(
         """
         UPDATE materials
@@ -227,14 +227,20 @@ def refresh_current_prices(conn: sqlite3.Connection) -> None:
     )
 
 
-def run(source: InventorySource, db_path: Path | str = DEFAULT_DB_PATH) -> LoadStats:
-    """Load the source into the database as a single atomic transaction.
+def _count_stale_materials(conn: sqlite3.Connection) -> int:
+    """Count stocked (non-sample) materials that no longer have any lot in the sheet."""
+    return conn.execute(
+        """SELECT COUNT(*) FROM materials m
+           WHERE NOT EXISTS (SELECT 1 FROM lots l WHERE l.material_id = m.material_id)
+             AND m.is_sample_only = 0"""
+    ).fetchone()[0]
 
-    Atomicity matters more than it looks: the run begins by clearing lots and
-    staging, so a failure partway through (a malformed row, a dropped network
-    connection mid-fetch once the source is the live Google Sheet) would
-    otherwise leave the database emptied and not repopulated. Everything
-    between reset and refresh commits together or not at all.
+
+def run(source: InventorySource, db_path: Path | str = DEFAULT_DB_PATH) -> LoadStats:
+    """Load the source into the database as one atomic transaction and return the stats.
+
+    Atomic because the run starts by clearing lots: a failure partway through
+    must leave the previous data in place, not an emptied database.
     """
     conn = init_db(db_path)          # schema DDL commits on its own
     stats = LoadStats()
@@ -244,11 +250,7 @@ def run(source: InventorySource, db_path: Path | str = DEFAULT_DB_PATH) -> LoadS
         stage(conn, source, stats)
         load_materials_and_lots(conn, stats)
         refresh_current_prices(conn)
-        stats.stale_materials = conn.execute(
-            """SELECT COUNT(*) FROM materials m
-               WHERE NOT EXISTS (SELECT 1 FROM lots l WHERE l.material_id = m.material_id)
-                 AND m.is_sample_only = 0"""
-        ).fetchone()[0]
+        stats.stale_materials = _count_stale_materials(conn)
         conn.commit()
     except Exception:
         conn.rollback()              # database is left exactly as it was
@@ -258,39 +260,30 @@ def run(source: InventorySource, db_path: Path | str = DEFAULT_DB_PATH) -> LoadS
     return stats
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Load the inventory sheet into the materials master DB.")
-    parser.add_argument("csv_path", nargs="?", default="data/synthetic/raw_material_inventory.csv")
-    parser.add_argument("--source", choices=["csv", "sheets"], default="csv",
-                         help="Where to read inventory rows from (default: csv).")
-    parser.add_argument("--db", default=str(DEFAULT_DB_PATH))
-    args = parser.parse_args()
+def _build_source(args: argparse.Namespace) -> tuple[InventorySource, str]:
+    """Return the source chosen on the command line and a label for printing."""
+    if args.source == "csv":
+        return CsvInventorySource(args.csv_path), args.csv_path
 
-    if args.source == "sheets":
-        # Deferred imports: gspread/google-auth are only needed for this
-        # branch (see requirements-sheets.txt), so the default CSV path
-        # never has to import them.
-        try:
-            from .sources.sheets_source import SheetsInventorySource
-        except ModuleNotFoundError as exc:
-            raise SystemExit(
-                f"{exc}. --source sheets needs the packages in "
-                f"requirements-sheets.txt: pip install -r requirements-sheets.txt"
-            )
-        from .config import ConfigError, load_sheets_config
+    # Deferred imports: gspread/google-auth are only needed for --source sheets.
+    try:
+        from .sources.sheets_source import SheetsInventorySource
+    except ModuleNotFoundError as exc:
+        raise SystemExit(
+            f"{exc}. --source sheets needs the packages in "
+            f"requirements-sheets.txt: pip install -r requirements-sheets.txt"
+        )
+    from .config import ConfigError, load_sheets_config
 
-        try:
-            config = load_sheets_config()
-        except ConfigError as exc:
-            raise SystemExit(f"Config error: {exc}")
-        source = SheetsInventorySource(config)
-        source_label = f"Google Sheet {config.sheet_id} (tab {config.tab_name!r})"
-    else:
-        source = CsvInventorySource(args.csv_path)
-        source_label = args.csv_path
+    try:
+        config = load_sheets_config()
+    except ConfigError as exc:
+        raise SystemExit(f"Config error: {exc}")
+    return SheetsInventorySource(config), f"Google Sheet {config.sheet_id} (tab {config.tab_name!r})"
 
-    stats = run(source, args.db)
 
+def _print_stats(stats: LoadStats, source_label: str) -> None:
+    """Print the run summary."""
     print(f"Staged {stats.staged_rows} rows from {source_label}")
     if stats.header_mismatches:
         print(f"  WARNING: source is missing expected columns: {stats.header_mismatches}")
@@ -301,6 +294,20 @@ def main() -> None:
     print(f"Materials with conflicting name on a repeated Part #: {stats.materials_conflicted}")
     if stats.stale_materials:
         print(f"Materials in DB no longer present in the sheet: {stats.stale_materials}")
+
+
+def main() -> None:
+    """Command-line entry point: load the chosen source and print a summary."""
+    parser = argparse.ArgumentParser(description="Load the inventory sheet into the materials master DB.")
+    parser.add_argument("csv_path", nargs="?", default="data/synthetic/raw_material_inventory.csv")
+    parser.add_argument("--source", choices=["csv", "sheets"], default="csv",
+                        help="Where to read inventory rows from (default: csv).")
+    parser.add_argument("--db", default=str(DEFAULT_DB_PATH))
+    args = parser.parse_args()
+
+    source, source_label = _build_source(args)
+    stats = run(source, args.db)
+    _print_stats(stats, source_label)
 
 
 if __name__ == "__main__":
