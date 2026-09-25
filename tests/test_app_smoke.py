@@ -46,7 +46,7 @@ def app(db_path) -> AppTest:
 
 def test_every_tab_renders_without_error(app):
     assert not app.exception
-    assert len(app.tabs) == 6
+    assert len(app.tabs) == 7
 
 
 def test_location_search_shows_a_table(app):
@@ -91,6 +91,21 @@ def test_open_flavor_shows_its_lines_and_cost(db_path):
     assert not at.exception
     assert any("Mystery powder" in str(df.value) for df in at.dataframe)
     assert any("Rough material cost" in c.value or "No prices on file" in c.value for c in at.caption)
+
+
+def test_record_sheet_tab_shows_the_copy_block(db_path):
+    conn = db.init_db(db_path)
+    sheet_id = fs.create_sheet(conn, customer="Acme", servings=30)
+    profile_id = fs.add_profile(conn, sheet_id, flavor_name="Mango")
+    fs.add_line(conn, profile_id, typed_name="Mystery powder", mg_per_serving=50.0)
+    conn.close()
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+
+    assert not at.exception
+    assert any("Mystery powder\t50\t1\t0\t50" in c.value for c in at.code)
+    assert any("Mystery powder" in w.value for w in at.warning)
 
 
 def test_cost_caption_labels_a_partial_estimate():

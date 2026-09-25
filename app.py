@@ -13,7 +13,10 @@ import streamlit as st
 
 from dtf_materials import db
 from dtf_materials import queries as q
-from ui import all_materials_tab, combined_tab, flavor_sheet_tab, lab_tab, location_tab, material_tab
+from ui import (
+    all_materials_tab, combined_tab, flavor_sheet_tab, lab_tab, location_tab, material_tab,
+    sample_record_tab,
+)
 from ui.common import get_conn
 
 st.set_page_config(page_title="Materials Master", page_icon="~", layout="wide")
@@ -39,7 +42,7 @@ stat_locations.metric("Locations", f"{summary['locations']:,}")
 
 tabs = st.tabs([
     "Warehouse + Lab", "Material lookup", "What's in a location",
-    "All materials", "Lab Samples", "Flavor Sheet",
+    "All materials", "Lab Samples", "Flavor Sheet", "Sample Record Sheet",
 ])
 with tabs[0]:
     combined_tab.render(conn, summary)
@@ -53,3 +56,5 @@ with tabs[4]:
     lab_tab.render(conn, summary)
 with tabs[5]:
     flavor_sheet_tab.render(conn)
+with tabs[6]:
+    sample_record_tab.render(conn)

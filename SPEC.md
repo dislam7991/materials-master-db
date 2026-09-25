@@ -177,7 +177,7 @@ done. The three real templates were received 2026-09-21 and are mapped in
   are the PL Cost Sheet paste, on purpose. When a flavor profile doesn't fit,
   insert rows in Excel (it extends the ranges itself) before pasting F2i's
   block.
-- [ ] **F2i. Flavor lines as a copy block** (user's workflow and call,
+- [x] **F2i. Flavor lines as a copy block** (user's workflow and call,
       2026-09-24 — layout map §1, "A filled manager sheet"). The manager
       downloads the record sheet from OneDrive, pastes the actives from the PL
       Cost Sheet and types the excipients; the flavor lines are the part the
