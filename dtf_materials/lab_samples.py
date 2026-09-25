@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import cleaning
-from .config import ConfigError, LabSheetConfig, load_lab_sheet_config
+from .config import ConfigError, SheetConfig, load_lab_sheet_config
 from .db import DEFAULT_DB_PATH, init_db
 from .sources.base import rows_from_values
 
@@ -78,7 +78,7 @@ class LabLoadStats:
     duplicate_sample_codes: dict[str, list[int]] = field(default_factory=dict)
 
 
-def _fetch_values(config: LabSheetConfig) -> list[list[str]]:
+def _fetch_values(config: SheetConfig) -> list[list[str]]:
     """Return the lab sheet tab's raw cell values, header row included."""
     try:
         from .sources.gsheets_common import open_worksheet
@@ -94,12 +94,12 @@ def _fetch_values(config: LabSheetConfig) -> list[list[str]]:
     return worksheet.get_all_values()
 
 
-def fetch_rows(config: LabSheetConfig) -> list[dict[str, str]]:
+def fetch_rows(config: SheetConfig) -> list[dict[str, str]]:
     """Fetch the lab sheet and return one dict per data row, keyed by header (raises LabSheetHeaderError)."""
     return list(rows_from_values(_fetch_values(config), EXPECTED_LAB_HEADERS, LabSheetHeaderError))
 
 
-def load_lab_samples(config: LabSheetConfig, db_path: Path | str = DEFAULT_DB_PATH) -> LabLoadStats:
+def load_lab_samples(config: SheetConfig, db_path: Path | str = DEFAULT_DB_PATH) -> LabLoadStats:
     """Upsert the lab sheet into `lab_samples` keyed on RD-ID, in one transaction.
 
     Rows are classified before any write, so a duplicated RD-ID is skipped
@@ -153,7 +153,7 @@ def _upsert_samples(conn, loadable: list[tuple[int, str, dict]], stats: LabLoadS
     stats.duplicate_sample_codes = {c: rs for c, rs in by_code.items() if len(rs) > 1}
 
 
-def _print_stats(stats: LabLoadStats, config: LabSheetConfig) -> None:
+def _print_stats(stats: LabLoadStats, config: SheetConfig) -> None:
     """Print the load summary and every flagged row."""
     print(
         f"Staged {stats.staged_rows} rows from lab sheet {config.sheet_id} "

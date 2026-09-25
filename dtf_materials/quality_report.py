@@ -1,13 +1,9 @@
 """Data-quality report over the staged inventory sheet.
 
-Runs against `staging_inventory_raw`, independent of whether the load into
-materials/lots succeeded — the point is to show the mess the sheet-only
-workflow creates, including rows too broken to load at all. Run the ETL
-first (`python -m dtf_materials.etl`) so staging is populated.
+Reads `staging_inventory_raw`, so it covers rows too broken to load at all.
+Run the ETL first so staging is populated.
 
-`--out report.md` additionally writes the findings as Markdown, so the mess
-can be linked from the README or handed to someone at work who is never
-going to run a Python command.
+Run with:  python -m dtf_materials.quality_report [--db PATH] [--out report.md]
 """
 
 from __future__ import annotations
@@ -21,98 +17,128 @@ from . import cleaning
 from .db import DEFAULT_DB_PATH, connect
 
 
+# Two supplier spellings more similar than this are flagged as a possible duplicate.
+SUPPLIER_SIMILARITY_THRESHOLD = 0.6
+
+
 def report(db_path=DEFAULT_DB_PATH) -> dict:
-    conn = connect(db_path)
-    rows = conn.execute("SELECT * FROM staging_inventory_raw ORDER BY source_row").fetchall()
-    conn.close()
-
+    """Return every data-quality finding in staging, as {finding type: list of findings}."""
+    rows = _load_staging(db_path)
     findings: dict[str, list] = defaultdict(list)
-
-    parts_seen: dict[str, set[str]] = defaultdict(set)   # part_num -> set of normalized names
-    parts_rows: dict[str, list[int]] = defaultdict(list)
-    supplier_spellings: dict[str, set[str]] = defaultdict(set)  # normalized key -> raw spellings seen
-    parts_suppliers: dict[str, set[str]] = defaultdict(set)     # part # -> supplier keys seen
-
     for row in rows:
-        n = row["source_row"]
-
-        part_num = cleaning.clean_text(row["dtf_part_num"])
-        if part_num is None:
-            findings["missing_part_num"].append(n)
-        else:
-            name = cleaning.clean_text(row["material_name"])
-            if name:
-                parts_seen[part_num].add(cleaning.normalize_key(name))
-            parts_rows[part_num].append(n)
-
-        if cleaning.parse_price(row["price_per_kilo"]) is None and cleaning.clean_text(row["price_per_kilo"]) is not None:
-            findings["unparseable_price"].append((n, row["price_per_kilo"]))
-        elif cleaning.clean_text(row["price_per_kilo"]) is None:
-            findings["missing_price"].append(n)
-
-        if cleaning.clean_text(row["receiving_date"]) is not None and cleaning.parse_date(row["receiving_date"]) is None:
-            findings["unparseable_receiving_date"].append((n, row["receiving_date"]))
-        if cleaning.clean_text(row["receiving_date"]) is None:
-            findings["missing_receiving_date"].append(n)
-
-        supplier = cleaning.clean_text(row["supplier_mfg"])
-        if supplier:
-            supplier_spellings[cleaning.normalize_key(supplier)].add(supplier)
-            if part_num is not None:
-                parts_suppliers[part_num].add(cleaning.normalize_key(supplier))
-
-        price = cleaning.parse_price(row["price_per_kilo"])
-        if price is not None and price <= 0:
-            findings["nonpositive_price"].append((n, row["price_per_kilo"]))
-
-        if cleaning.clean_text(row["locations"]) is None:
-            findings["missing_location"].append(n)
-        else:
-            for loc in cleaning.split_locations(row["locations"]):
-                if not cleaning.is_standard_location(loc):
-                    findings["nonstandard_location"].append((n, loc))
-
-        if cleaning.clean_text(row["category"]) is None:
-            findings["missing_category"].append(n)
-
-    for part_num, sups in parts_suppliers.items():
-        if len(sups) > 1:
-            findings["part_num_multiple_suppliers"].append((part_num, sorted(sups)))
-
-    for part_num, names in parts_seen.items():
-        if len(names) > 1:
-            findings["conflicting_part_num"].append((part_num, sorted(names), parts_rows[part_num]))
-
-    # Suppliers that differ only by formatting have already been collapsed by
-    # normalize_key upstream; here we look for spellings that are DIFFERENT
-    # keys but suspiciously similar strings — the kind a human should review
-    # for merging (e.g. "NutraSci" vs "Nutra Sci").
-    # min() rather than an arbitrary set element: set iteration order for
-    # strings varies with the process hash seed, which made this report's
-    # output differ between runs on identical data.
-    canonical_spellings = sorted(min(s) for s in supplier_spellings.values())
-    for a in canonical_spellings:
-        for b in canonical_spellings:
-            if a >= b:
-                continue
-            ratio = SequenceMatcher(None, a.lower(), b.lower()).ratio()
-            if ratio > 0.6:
-                findings["possible_duplicate_supplier"].append((a, b, round(ratio, 2)))
-
+        for key, value in _row_findings(row):
+            findings[key].append(value)
+    findings["part_num_multiple_suppliers"] += _part_nums_with_several_suppliers(rows)
+    findings["conflicting_part_num"] += _conflicting_part_nums(rows)
+    findings["possible_duplicate_supplier"] += _similar_suppliers(rows)
     return findings
 
 
-def build_sections(findings: dict) -> list[tuple[str, list[str]]]:
-    """The report's content as (heading, detail lines) pairs.
+def _load_staging(db_path) -> list:
+    """Return every staged source row, in sheet order."""
+    conn = connect(db_path)
+    rows = conn.execute("SELECT * FROM staging_inventory_raw ORDER BY source_row").fetchall()
+    conn.close()
+    return rows
 
-    Content is built once here and rendered twice below, so the terminal
-    output and the Markdown file cannot drift apart — the whole value of the
-    file is that it says exactly what the run said. Detail lines carry no
-    indentation; each renderer indents or fences them itself.
+
+def _row_findings(row) -> list[tuple[str, object]]:
+    """Return (finding type, detail) pairs for the problems within one staged row."""
+    n = row["source_row"]
+    found: list[tuple[str, object]] = []
+
+    if cleaning.clean_text(row["dtf_part_num"]) is None:
+        found.append(("missing_part_num", n))
+
+    price_text = cleaning.clean_text(row["price_per_kilo"])
+    price = cleaning.parse_price(row["price_per_kilo"])
+    if price_text is None:
+        found.append(("missing_price", n))
+    elif price is None:
+        found.append(("unparseable_price", (n, row["price_per_kilo"])))
+    elif price <= 0:
+        found.append(("nonpositive_price", (n, row["price_per_kilo"])))
+
+    if cleaning.clean_text(row["receiving_date"]) is None:
+        found.append(("missing_receiving_date", n))
+    elif cleaning.parse_date(row["receiving_date"]) is None:
+        found.append(("unparseable_receiving_date", (n, row["receiving_date"])))
+
+    if cleaning.clean_text(row["locations"]) is None:
+        found.append(("missing_location", n))
+    for loc in cleaning.split_locations(row["locations"]):
+        if not cleaning.is_standard_location(loc):
+            found.append(("nonstandard_location", (n, loc)))
+
+    if cleaning.clean_text(row["category"]) is None:
+        found.append(("missing_category", n))
+    return found
+
+
+def _part_nums_with_several_suppliers(rows) -> list[tuple[str, list[str]]]:
+    """Return (part #, supplier keys) for every part number listed under more than one supplier."""
+    suppliers: dict[str, set[str]] = defaultdict(set)
+    for row in rows:
+        part_num = cleaning.clean_text(row["dtf_part_num"])
+        supplier = cleaning.clean_text(row["supplier_mfg"])
+        if part_num is not None and supplier:
+            suppliers[part_num].add(cleaning.normalize_key(supplier))
+    return [(part_num, sorted(keys)) for part_num, keys in suppliers.items() if len(keys) > 1]
+
+
+def _conflicting_part_nums(rows) -> list[tuple[str, list[str], list[int]]]:
+    """Return (part #, names, source rows) for every part number used for different material names."""
+    names: dict[str, set[str]] = defaultdict(set)
+    source_rows: dict[str, list[int]] = defaultdict(list)
+    for row in rows:
+        part_num = cleaning.clean_text(row["dtf_part_num"])
+        if part_num is None:
+            continue
+        name = cleaning.clean_text(row["material_name"])
+        if name:
+            names[part_num].add(cleaning.normalize_key(name))
+        source_rows[part_num].append(row["source_row"])
+    return [
+        (part_num, sorted(part_names), source_rows[part_num])
+        for part_num, part_names in names.items() if len(part_names) > 1
+    ]
+
+
+def _similar_suppliers(rows) -> list[tuple[str, str, float]]:
+    """Return (spelling, spelling, similarity) for supplier names that look like the same company.
+
+    Spellings differing only in case/spacing are already one supplier; this
+    flags different keys with similar text ("NutraSci" vs "Nutra Sci") for a
+    human to review. min() picks each key's representative spelling
+    deterministically, so the report is the same on every run.
+    """
+    spellings: dict[str, set[str]] = defaultdict(set)
+    for row in rows:
+        supplier = cleaning.clean_text(row["supplier_mfg"])
+        if supplier:
+            spellings[cleaning.normalize_key(supplier)].add(supplier)
+
+    canonical = sorted(min(s) for s in spellings.values())
+    similar = []
+    for a in canonical:
+        for b in canonical:
+            if a >= b:
+                continue
+            ratio = SequenceMatcher(None, a.lower(), b.lower()).ratio()
+            if ratio > SUPPLIER_SIMILARITY_THRESHOLD:
+                similar.append((a, b, round(ratio, 2)))
+    return similar
+
+
+def build_sections(findings: dict) -> list[tuple[str, list[str]]]:
+    """Return the report's content as (heading, detail lines) pairs.
+
+    Built once and rendered twice (text and Markdown), so the two can't drift apart.
     """
     sections: list[tuple[str, list[str]]] = []
 
     def add(heading: str, details: list[str] | None = None) -> None:
+        """Append one section."""
         sections.append((heading, details or []))
 
     if findings["missing_part_num"]:
@@ -177,7 +203,7 @@ def build_sections(findings: dict) -> list[tuple[str, list[str]]]:
 
 
 def format_text(findings: dict) -> str:
-    """The terminal rendering: heading, then its details indented under it."""
+    """Render the report for the terminal: each heading with its details indented under it."""
     total_flags = sum(len(v) for v in findings.values())
     lines = [f"=== Data Quality Report ===  ({total_flags} findings)", ""]
     for heading, details in build_sections(findings):
@@ -188,12 +214,10 @@ def format_text(findings: dict) -> str:
 
 
 def format_markdown(findings: dict) -> str:
-    """The same findings as `format_text`, as a linkable Markdown artifact.
+    """Render the same report as Markdown.
 
-    Detail lines stay inside fenced blocks instead of being reflowed as
-    prose. They quote raw cell values verbatim (`'1L-28-'`, `'12.50 USD'`),
-    and escaping those for Markdown would risk the file misrepresenting what
-    is actually in the sheet — which is the one thing this report is for.
+    Details stay in fenced blocks so raw cell values are quoted verbatim, never
+    escaped or reflowed.
     """
     total_flags = sum(len(v) for v in findings.values())
     lines = ["# Data Quality Report", "", f"{total_flags} findings in the staged inventory sheet.", ""]
@@ -205,18 +229,15 @@ def format_markdown(findings: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def print_report(findings: dict) -> None:
-    print(format_text(findings), end="")
-
-
 def main() -> None:
+    """Command-line entry point: print the report, and write it as Markdown with --out."""
     parser = argparse.ArgumentParser(description="Data-quality report on the staged inventory sheet.")
     parser.add_argument("--db", default=str(DEFAULT_DB_PATH))
     parser.add_argument("--out", metavar="PATH",
                         help="also write the findings to PATH as Markdown (e.g. --out report.md)")
     args = parser.parse_args()
     findings = report(args.db)
-    print_report(findings)
+    print(format_text(findings), end="")
     if args.out:
         Path(args.out).write_text(format_markdown(findings), encoding="utf-8")
         print(f"Wrote Markdown report to {args.out}")

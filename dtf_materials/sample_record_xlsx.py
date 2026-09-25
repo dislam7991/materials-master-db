@@ -1,42 +1,10 @@
 """Fill the company Sample Record Sheet template from a flavor's data.
 
-The second Phase F renderer (F2c), built the same way as the Flavor Sheet one
-(flavor_sheet_xlsx.py) and reusing the same flavor-profile data: the Record
-Sheet is one formula per sample, so one flavor profile renders one sheet. Its
-Label Claim column *is* the profile's mg-per-serving; Part Number and Price/kg
-are resolved from the row each line references (queries.record_line_catalog),
-never copied — a corrected price reaches the sheet the next time it's rendered.
-
-Fill, never regenerate (SPEC Phase F): copy the template, write inputs into
-known cells, keep every border, formula and page setting. Cell map in
-docs/phase_f_templates_layout.md §1. What gets written, and only this:
-
-- Header block: Brand, Product, Flavor, Sample code, Notes, Scoop Size,
-  Servings/Unit, Quote ID, Jar/Lid, Servings(base).
-- Per line: Part Number (A), Raw Material (B), Label Claim mg (C),
-  Activity (D), Overage (E), Price/kg (I).
-
-Everything else the template computes and this module must NOT touch: Actual
-Input, g/run, Formula %, Cost/Unit, kg/run and the whole totals + cost panel
-are the sheet's own formulas (layout §1 findings 1-3 are template defects the
-owner fixes, not something a renderer papers over).
-
-Three constraints the template imposes, from the layout findings:
-
-- **Fixed capacity** (finding 5): 23 active lines, 12 excipient lines. Rows
-  can't be inserted without breaking the SUM ranges, so a formula that doesn't
-  fit is *refused* (RecordSheetOverflow) — the opposite of the Flavor Sheet,
-  which grows. Better a clear error than a silently truncated recipe.
-- **A blank Price/kg stays blank** (finding 4): the sheet treats an empty
-  price as $0 and the total still looks complete, so a missing price must be
-  left empty and flagged elsewhere, never written as 0.
-- **The "blank" template isn't blank** (finding 6): it ships with an example
-  formula, so every input cell in the two line sections and the header is
-  cleared before writing.
-
-openpyxl writes formulas without cached results, so the workbook is flagged to
-recalculate on open; a preview that doesn't calculate shows the computed
-columns blank until Excel opens it. Needs openpyxl; the ETL never imports it.
+Fill, never regenerate: write only the header and per-line input cells
+(docs/phase_f_templates_layout.md §1); every computed column and total is the
+sheet's own formula. The sections have fixed capacity, so an oversized formula
+is refused (RecordSheetOverflow) rather than truncated, and a missing price is
+left blank, never 0. Needs openpyxl; the ETL never imports it.
 """
 
 from __future__ import annotations
@@ -77,18 +45,12 @@ _HEADER_CELLS = {
 
 
 class RecordSheetOverflow(ValueError):
-    """Raised when a formula has more active or excipient lines than the
-    template's fixed sections hold. The template's SUM/banding ranges are wired
-    to fixed rows, so growing the sheet would corrupt them (layout §1 finding
-    5); refusing is the safe choice."""
+    """A section has more lines than the template's fixed rows hold (growing it would break its SUMs)."""
 
 
 @dataclass
 class RecordLine:
-    """One ingredient row as the sheet prints it. `is_active` picks the section
-    (Actives vs. Flavor System and Excipients). Part Number and Price/kg come
-    from the referenced catalog row and may be None (a lab-only sample has no
-    Part #; a missing price is left blank, never 0 — finding 4)."""
+    """One ingredient row as printed; `is_active` picks Actives vs. Excipients, and part_num/price may be None."""
 
     name: str
     label_claim_mg: float | None = None
@@ -101,9 +63,7 @@ class RecordLine:
 
 @dataclass
 class RecordSheet:
-    """A rendered Record Sheet: the header inputs plus the ingredient lines.
-    Header fields the flavor profile doesn't hold (scoop size, servings/unit,
-    notes, jar/lid, servings base) are authored per sample and passed in."""
+    """Everything one Record Sheet prints: the header inputs plus the ingredient lines."""
 
     brand: str | None = None
     product: str | None = None
@@ -119,9 +79,7 @@ class RecordSheet:
 
 
 def render(record: RecordSheet, template_path: Path | str = DEFAULT_TEMPLATE_PATH) -> bytes:
-    """Return the filled workbook as .xlsx bytes. Raises RecordSheetOverflow if
-    a section has more lines than the template holds (checked before any cell
-    is written, so a rejected render leaves nothing half-filled)."""
+    """Return the filled workbook as .xlsx bytes; raises RecordSheetOverflow before writing anything."""
     actives = [l for l in record.lines if l.is_active]
     excipients = [l for l in record.lines if not l.is_active]
     if len(actives) > ACTIVE_CAPACITY:
@@ -150,8 +108,7 @@ def render(record: RecordSheet, template_path: Path | str = DEFAULT_TEMPLATE_PAT
 
 
 def _fill_section(ws, first_row: int, capacity: int, lines: list[RecordLine]) -> None:
-    # Clear the template's example inputs across the whole section first, so a
-    # shorter formula leaves no stale rows behind (finding 6).
+    """Clear a section's input cells (the template ships with an example), then write the lines."""
     for r in range(first_row, first_row + capacity):
         for col in _LINE_INPUT_COLUMNS:
             ws[f"{col}{r}"] = None

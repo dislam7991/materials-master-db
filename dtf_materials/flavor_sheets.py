@@ -1,20 +1,11 @@
-"""The Flavor Sheet object: a header plus any number of flavor profiles, each a
-BASE amount and material lines in mg per serving.
+"""The Flavor Sheet object: a header plus flavor profiles, each a BASE amount
+and material lines in mg per serving.
 
-Built backwards from the deliverable (SPEC Phase F): the Flavor Sheet is what R&D
-fills daily, so this object holds exactly what that sheet asks for and nothing
-more — customer, product, quote ID, servings per flavor, and per flavor its
-materials and mg per serving. Grams per sample are derived (mg x servings /
-1000), never stored, so changing the servings can't leave a stale weight behind.
-
-Like formulas.py, this module owns both the write side and the read side; the
-Streamlit tab drives these functions and the xlsx renderer
-(flavor_sheet_xlsx.py) consumes get_lines output — neither reimplements them.
-Functions commit their own writes: a sheet is saved work, one local writer.
-
-A line references its material (material_id / rd_id) so a renamed material
-reaches every sheet, or carries a typed_name for a material neither catalog has
-yet — see the flavor_sheets comment in db/schema.sql for why that's allowed here.
+Holds exactly what the company Flavor Sheet asks for. Grams per sample are
+derived (mg x servings / 1000), never stored. A line references its material
+(material_id / rd_id) so name and price resolve at read time, or carries a
+typed_name for a material neither catalog has yet. Functions commit their own
+writes: a sheet is saved work.
 """
 
 from __future__ import annotations
@@ -25,18 +16,28 @@ from datetime import date
 HEADER_FIELDS = ("customer", "product", "quote_id", "servings", "sample_prefix")
 
 
+def _next_position(conn: sqlite3.Connection, table: str, parent_column: str, parent_id: int) -> int:
+    """Return the next free print slot under a parent row (1 when it has none)."""
+    (position,) = conn.execute(
+        f"SELECT COALESCE(MAX(position), 0) + 1 FROM {table} WHERE {parent_column} = ?",
+        (parent_id,),
+    ).fetchone()
+    return position
+
+
 def create_sheet(conn: sqlite3.Connection, **header) -> int:
     """Create an empty flavor sheet from HEADER_FIELDS and return its id."""
-    values = [header.get(k) for k in HEADER_FIELDS]
     cur = conn.execute(
-        f"INSERT INTO flavor_sheets ({', '.join(HEADER_FIELDS)}) VALUES (?,?,?,?,?)",
-        values,
+        f"INSERT INTO flavor_sheets ({', '.join(HEADER_FIELDS)}) "
+        f"VALUES ({', '.join('?' * len(HEADER_FIELDS))})",
+        [header.get(k) for k in HEADER_FIELDS],
     )
     conn.commit()
     return cur.lastrowid
 
 
 def update_sheet(conn: sqlite3.Connection, flavor_sheet_id: int, **header) -> None:
+    """Update the given header fields of a sheet; keys outside HEADER_FIELDS are ignored."""
     fields = [k for k in header if k in HEADER_FIELDS]
     if not fields:
         return
@@ -49,15 +50,13 @@ def update_sheet(conn: sqlite3.Connection, flavor_sheet_id: int, **header) -> No
 
 
 def delete_sheet(conn: sqlite3.Connection, flavor_sheet_id: int) -> None:
-    """Delete a sheet with its profiles and lines (ON DELETE CASCADE — which
-    needs foreign_keys ON, as db.connect and the app's connection both set)."""
+    """Delete a sheet with its profiles and lines (cascade; needs foreign_keys ON, as db.connect sets)."""
     conn.execute("DELETE FROM flavor_sheets WHERE flavor_sheet_id = ?", (flavor_sheet_id,))
     conn.commit()
 
 
 def list_sheets(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Every sheet, newest first (the one you're still working on), with its
-    flavor count so the picker can tell an empty draft from a finished sheet."""
+    """Return every sheet, newest first, each with its flavor count."""
     return conn.execute(
         """
         SELECT s.*,
@@ -70,28 +69,28 @@ def list_sheets(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 
 
 def get_sheet(conn: sqlite3.Connection, flavor_sheet_id: int) -> sqlite3.Row | None:
+    """Return one sheet's header row, or None if it doesn't exist."""
     return conn.execute(
         "SELECT * FROM flavor_sheets WHERE flavor_sheet_id = ?", (flavor_sheet_id,)
     ).fetchone()
 
 
 def product_line(sheet) -> str:
-    """The sheet's one identifying line — Customer - Product - Quote ID — with
-    blanks skipped rather than printed as empty separators."""
+    """Return "Customer - Product - Quote ID", skipping blank parts."""
     parts = [sheet[k] for k in ("customer", "product", "quote_id")]
     return " - ".join(p.strip() for p in parts if p and p.strip())
 
 
 def suggest_sample_id(prefix: str | None, day: date, position: int) -> str:
-    """<prefix><YYMMDD>-<NN>, the shape of the Sample IDs on existing sheets
-    (e.g. SMPL260916-01): the date the sheet is made and the flavor's slot.
-    Only a suggestion — the user can overwrite it, and nothing checks it."""
+    """Return a suggested Sample ID, <prefix><YYMMDD>-<NN> (e.g. SMPL260916-01); the user may overwrite it."""
     return f"{(prefix or '').strip()}{day:%y%m%d}-{position:02d}"
 
 
 def grams_per_sample(mg_per_serving: float | None, servings: float | None) -> float | None:
-    """The sheet's g column: mg x servings / 1000. None when either input is
-    missing — a blank amount is not a zero-gram weigh-up."""
+    """Return grams per sample (mg x servings / 1000), or None if either input is blank.
+
+    A blank amount is not a zero-gram weigh-up.
+    """
     if mg_per_serving is None or servings is None:
         return None
     return mg_per_serving * servings / 1000
@@ -100,28 +99,20 @@ def grams_per_sample(mg_per_serving: float | None, servings: float | None) -> fl
 def line_cost_per_serving(
     mg_per_serving: float | None, price_per_kilo: float | None
 ) -> float | None:
-    """Material cost of one line in one serving: mg is milligrams and price is
-    per kilo (1e6 mg), so cost = mg / 1e6 x price. None when either input is
-    missing — an unpriced or amountless line has no knowable cost, and a rough
-    total must leave it out rather than count it as free."""
+    """Return one line's cost per serving (mg / 1e6 x price per kilo), or None if either is unknown.
+
+    None, not 0: an unpriced line must be left out of a total, not counted as free.
+    """
     if mg_per_serving is None or price_per_kilo is None:
         return None
     return mg_per_serving / 1_000_000 * price_per_kilo
 
 
 def profile_cost(lines, servings: float | None = None) -> dict:
-    """A rough material cost for a flavor profile, summed from the priced lines
-    only (each line is a Row from get_lines, carrying mg_per_serving and
-    price_per_kilo). Returns per-serving cost, per-sample cost (None until
-    servings is set), the count of lines that priced, and the count left out for
-    want of a price — so the builder can label the figure an estimate and say
-    what it excludes rather than pass off an incomplete number as exact.
+    """Return a rough cost for a profile's lines: per_serving, per_sample, priced and unpriced counts.
 
-    Deliberately partial: a typed line or a catalog row with no price on file
-    drops out. BASE isn't a line here (it carries no material, so no price); it
-    adds weight, not cost. This never fabricates a missing price (SPEC §2) and
-    the generated flavor sheet stays price-free — the estimate lives in the
-    builder alone.
+    Summed from priced lines only, so the caller can label it an estimate and
+    say what it excludes. A missing price is never filled in; BASE adds no cost.
     """
     per_serving = 0.0
     priced = unpriced = 0
@@ -146,6 +137,7 @@ def profile_cost(lines, servings: float | None = None) -> dict:
 # --- flavor profiles -------------------------------------------------------
 
 def get_profiles(conn: sqlite3.Connection, flavor_sheet_id: int) -> list[sqlite3.Row]:
+    """Return a sheet's flavor profiles in print order."""
     return conn.execute(
         "SELECT * FROM flavor_profiles WHERE flavor_sheet_id = ? "
         "ORDER BY position, flavor_profile_id",
@@ -161,15 +153,12 @@ def add_profile(
     base_mg: float | None = None,
     copy_lines_from: int | None = None,
 ) -> int:
-    """Append a flavor profile in the next slot. `copy_lines_from` (another
-    profile's id) copies its BASE amount and lines — flavors on one sheet
-    usually share the base, acids and sweeteners and differ only in flavor and
-    color, so the second flavor starts from the first instead of from nothing.
-    A base_mg passed explicitly wins over the copied one."""
-    (next_pos,) = conn.execute(
-        "SELECT COALESCE(MAX(position), 0) + 1 FROM flavor_profiles WHERE flavor_sheet_id = ?",
-        (flavor_sheet_id,),
-    ).fetchone()
+    """Append a flavor profile in the next slot and return its id.
+
+    `copy_lines_from` (another profile's id) copies its BASE and lines; an
+    explicit base_mg wins over the copied one.
+    """
+    next_pos = _next_position(conn, "flavor_profiles", "flavor_sheet_id", flavor_sheet_id)
     if copy_lines_from is not None and base_mg is None:
         src = conn.execute(
             "SELECT base_mg FROM flavor_profiles WHERE flavor_profile_id = ?",
@@ -203,6 +192,7 @@ def update_profile(
     sample_id: str | None,
     base_mg: float | None,
 ) -> None:
+    """Replace a profile's name, Sample ID and BASE amount."""
     conn.execute(
         "UPDATE flavor_profiles SET flavor_name = ?, sample_id = ?, base_mg = ? "
         "WHERE flavor_profile_id = ?",
@@ -212,8 +202,7 @@ def update_profile(
 
 
 def delete_profile(conn: sqlite3.Connection, flavor_profile_id: int) -> None:
-    """Delete a profile and close the gap, so the flavors after it move up a
-    slot instead of leaving an empty box on the printed page."""
+    """Delete a profile and move the flavors after it up a slot, leaving no gap on the page."""
     row = conn.execute(
         "SELECT flavor_sheet_id, position FROM flavor_profiles WHERE flavor_profile_id = ?",
         (flavor_profile_id,),
@@ -240,13 +229,11 @@ def add_line(
     typed_name: str | None = None,
     mg_per_serving: float | None = None,
 ) -> int:
-    """Append a line, printed after the profile's existing lines. Exactly one
-    of material_id / rd_id / typed_name — the schema CHECK rejects anything
-    else, and the FKs reject an id no catalog row carries."""
-    (next_pos,) = conn.execute(
-        "SELECT COALESCE(MAX(position), 0) + 1 FROM flavor_profile_lines WHERE flavor_profile_id = ?",
-        (flavor_profile_id,),
-    ).fetchone()
+    """Append a line after the profile's existing lines and return its id.
+
+    Pass exactly one of material_id / rd_id / typed_name; the schema rejects anything else.
+    """
+    next_pos = _next_position(conn, "flavor_profile_lines", "flavor_profile_id", flavor_profile_id)
     cur = conn.execute(
         """
         INSERT INTO flavor_profile_lines
@@ -266,6 +253,7 @@ def update_line(
     mg_per_serving: float | None,
     position: int,
 ) -> None:
+    """Set a line's mg per serving and print position."""
     conn.execute(
         "UPDATE flavor_profile_lines SET mg_per_serving = ?, position = ? "
         "WHERE flavor_profile_line_id = ?",
@@ -275,6 +263,7 @@ def update_line(
 
 
 def delete_line(conn: sqlite3.Connection, flavor_profile_line_id: int) -> None:
+    """Delete one line."""
     conn.execute(
         "DELETE FROM flavor_profile_lines WHERE flavor_profile_line_id = ?",
         (flavor_profile_line_id,),
@@ -283,14 +272,10 @@ def delete_line(conn: sqlite3.Connection, flavor_profile_line_id: int) -> None:
 
 
 def get_lines(conn: sqlite3.Connection, flavor_profile_id: int) -> list[sqlite3.Row]:
-    """The profile's lines in print order, each with the name the sheet prints
-    resolved from its source at read time:
+    """Return a profile's lines in print order, with name, source and price resolved at read time.
 
-    - warehouse material: its material_name;
-    - lab sample: flavor name + sample code (e.g. "Peach E00000001") — how
-      existing flavor sheets name a lab flavor, since the code is what tells
-      two vendors' "Peach" apart on the bench;
-    - typed: the typed name, with `source` = 'Typed' so the UI can flag it.
+    A lab sample prints as flavor name + sample code ("Peach E00000001"): the
+    code is what tells two vendors' "Peach" apart on the bench.
     """
     return conn.execute(
         """
@@ -312,12 +297,8 @@ def get_lines(conn: sqlite3.Connection, flavor_profile_id: int) -> list[sqlite3.
                     TRIM(COALESCE(ls.flavor_name, '') || ' ' || COALESCE(ls.sample_code, ''))
                 ELSE l.typed_name
             END AS name,
-            -- Price/kg resolved from the referenced catalog row, like the name:
-            -- a warehouse material's current price or a lab sample's, NULL for a
-            -- typed line (no catalog row backs it) or a catalog row with no price
-            -- on file. Read at render time, never stored, so a reprice flows
-            -- through; the flavor sheet itself stays price-free (SPEC Phase F) —
-            -- this only feeds the builder's rough cost estimate.
+            -- NULL for a typed line or an unpriced catalog row. Feeds only the
+            -- builder's cost estimate; the printed sheet stays price-free.
             CASE
                 WHEN l.material_id IS NOT NULL THEN m.current_price_per_kilo
                 WHEN l.rd_id IS NOT NULL THEN ls.price_per_kilo

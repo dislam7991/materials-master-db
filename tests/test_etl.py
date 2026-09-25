@@ -45,25 +45,24 @@ class ListSource(InventorySource):
     """An in-memory source, so a test can re-order the rows the CSV gave us."""
 
     def __init__(self, rows: list[RawRow]):
+        """Hold the rows to yield."""
         self._rows = rows
 
     def rows(self) -> Iterator[RawRow]:
+        """Yield the held rows in order."""
         yield from self._rows
 
 
 class FailingSource(InventorySource):
-    """A source that dies partway through yielding rows.
-
-    Stands in for a malformed sheet or, once the source is the live Google
-    Sheet, the network dropping mid-fetch: the failure lands after the run
-    has already cleared the derived tables.
-    """
+    """A source that raises partway through, after the run has already cleared the derived tables."""
 
     def __init__(self, rows: list[RawRow], fail_after: int):
+        """Hold the rows and the index at which to raise."""
         self._rows = rows
         self._fail_after = fail_after
 
     def rows(self) -> Iterator[RawRow]:
+        """Yield rows until `fail_after`, then raise."""
         for i, row in enumerate(self._rows):
             if i == self._fail_after:
                 raise RuntimeError("source died mid-fetch")
@@ -72,18 +71,18 @@ class FailingSource(InventorySource):
 
 @pytest.fixture
 def source_rows() -> list[RawRow]:
+    """The committed synthetic sheet's rows."""
     return list(CsvInventorySource(SYNTHETIC_CSV).rows())
 
 
 @pytest.fixture
 def db_path(tmp_path):
+    """A path for a throwaway database."""
     return tmp_path / "test_materials.db"
 
 
 def dump_table(db_path, table: str) -> list[tuple]:
-    """Every row of `table`, minus ingestion timestamps, in a deterministic
-    order (sorting on every column, since not all tables have a single-column
-    key)."""
+    """Return every row of `table` minus timestamp columns, sorted on every column."""
     conn = connect(db_path)
     try:
         cols = [
@@ -98,10 +97,12 @@ def dump_table(db_path, table: str) -> list[tuple]:
 
 
 def dump_all(db_path) -> dict[str, list[tuple]]:
+    """Return dump_table for every table the ETL loads."""
     return {table: dump_table(db_path, table) for table in LOADED_TABLES}
 
 
 def material_ids_by_part(db_path) -> dict[str, int]:
+    """Return {part number: material_id} for every material."""
     conn = connect(db_path)
     try:
         return {

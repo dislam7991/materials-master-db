@@ -1,9 +1,7 @@
 """Read-only queries behind the lookup app.
 
-Kept separate from the Streamlit UI on purpose: these are plain functions
-over a sqlite3 connection, so they can be tested from a REPL or reused by a
-future CLI/API without importing Streamlit. Every query is parameterized —
-user-typed search text never reaches SQL as a string fragment.
+Plain functions over a sqlite3 connection, with no Streamlit import. Every
+query is parameterized: typed search text never reaches SQL as a fragment.
 """
 
 from __future__ import annotations
@@ -15,10 +13,7 @@ _LIKE_ESCAPE = "!"
 
 
 def _like(term: str) -> str:
-    """Wrap user input as a LIKE pattern, escaping the wildcards first so a
-    search for '100%' or 'B_12' matches literally instead of turning into a
-    match-everything pattern. '!' is the escape character (rather than a
-    backslash) purely to keep the SQL readable."""
+    """Return a %substring% LIKE pattern with the user's % and _ escaped (with '!') to match literally."""
     escaped = (
         term.replace(_LIKE_ESCAPE, _LIKE_ESCAPE * 2)
         .replace("%", _LIKE_ESCAPE + "%")
@@ -28,12 +23,7 @@ def _like(term: str) -> str:
 
 
 def search_materials(conn: sqlite3.Connection, term: str, limit: int = 50) -> list[sqlite3.Row]:
-    """Search by DTF Part # or material name (case-insensitive substring).
-
-    Ordered so exact/prefix Part # matches surface first — when someone types
-    a part number they almost always want that exact material, not the
-    alphabetically-first material whose name happens to contain the string.
-    """
+    """Return materials whose Part # or name contains the term, exact/prefix Part # matches first."""
     if not term or not term.strip():
         return []
     term = term.strip()
@@ -60,16 +50,7 @@ def search_materials(conn: sqlite3.Connection, term: str, limit: int = 50) -> li
 
 
 def search_lab_samples(conn: sqlite3.Connection, term: str, limit: int = 50) -> list[sqlite3.Row]:
-    """Search the R&D lab's flavor sample catalog by vendor, flavor name,
-    sample code, or DTF Part # (case-insensitive substring), same shape as
-    search_materials but against `lab_samples` — a separate table fed by a
-    separate Google Sheet, see db/schema.sql.
-
-    Ordered so exact/prefix Sample Code matches surface first, for the same
-    reason search_materials prioritizes Part # matches: someone typing a
-    code wants that exact sample, not the alphabetically-first flavor whose
-    name happens to contain the string.
-    """
+    """Return lab samples whose vendor, flavor, sample code or Part # contains the term, exact/prefix code first."""
     if not term or not term.strip():
         return []
     term = term.strip()
@@ -96,17 +77,13 @@ def search_lab_samples(conn: sqlite3.Connection, term: str, limit: int = 50) -> 
     ).fetchall()
 
 
-# Rule 2 below matches a sample code found inside a material name. A very
-# short code is a substring of half the warehouse, and a wrong link is
-# fabricated data — which outranks convenience here (SPEC.md section 2). Real
-# codes are 5-7 digits, so this floor excludes nothing that exists.
+# A very short sample code is a substring of half the warehouse, and a wrong
+# link is fabricated data. Real codes are 5-7 digits.
 MIN_LINKABLE_SAMPLE_CODE_LENGTH = 4
 
-# The two ways a lab sample is allowed to be the same thing as a warehouse
-# material, in priority order, decided in E2 and written up in
-# docs/flavor_sample_sheet_layout.md section 2b. Both loaders store a blank
-# cell as NULL (cleaning.clean_text), so IS NOT NULL is the "has a value"
-# test. Never a fuzzy name match: two vendors' "Vanilla" are two materials.
+# The two ways a lab sample may be the same thing as a warehouse material, in
+# priority order (docs/flavor_sample_sheet_layout.md §2b). Never a fuzzy name
+# match: two vendors' "Vanilla" are two materials.
 _PART_NUM_MATCH = """
     m.dtf_part_num IS NOT NULL AND ls.dtf_part_num IS NOT NULL
     AND UPPER(m.dtf_part_num) = UPPER(ls.dtf_part_num)
@@ -123,16 +100,10 @@ def _linked_pairs(
     material_ids: list[int],
     lab_sample_ids: list[int],
 ) -> list[sqlite3.Row]:
-    """Every (material, lab sample) link touching one of the given rows.
+    """Return every (material, lab sample) link that touches one of the given ids on either side.
 
-    Matched at read time rather than resolved at load time and stored: both
-    loaders full-reload, so a stored link would need invalidating on every
-    run to buy nothing at a few hundred rows.
-
-    Both sides are passed in because the question is symmetric — a search
-    that hits a warehouse material must still reveal the lab sample nobody
-    searched for, and vice versa. Every match is returned; picking one would
-    hide a second real material whose name happens to carry the same code.
+    Matched at read time, not stored, so a reload never leaves a stale link.
+    Every match is returned: picking one could hide a second real material.
     """
     if not material_ids and not lab_sample_ids:
         return []
@@ -156,8 +127,7 @@ def _linked_pairs(
 
 
 def _combined_result(kind: str, material=None, lab=None, match_rule=None) -> dict:
-    """One row of search_warehouse_and_lab, same keys whichever sides exist,
-    so the caller never has to ask which shape it got."""
+    """Return one search_warehouse_and_lab row, with the same keys whichever sides exist."""
     return {
         "kind": kind,
         "match_rule": match_rule,
@@ -174,27 +144,11 @@ def _combined_result(kind: str, material=None, lab=None, match_rule=None) -> dic
 def search_warehouse_and_lab(
     conn: sqlite3.Connection, term: str, limit: int = 50
 ) -> list[dict]:
-    """One search over both catalogs: "do we have this — in the warehouse, in
-    the lab, or both?"
+    """Search both catalogs and return rows labelled Both (with match_rule), Warehouse or Lab.
 
-    The two catalogs answer separately everywhere else in the app, which only
-    helps someone who already knows which of the two to try. A lab-only
-    sample has no material row at all, so searching the warehouse for it
-    finds nothing and says nothing about why.
-
-    Each result names the side(s) it was found on: `Both` for a linked pair
-    (with `match_rule` saying which rule linked it, so a surprising link is
-    explainable rather than magic), `Warehouse` or `Lab` for a row standing
-    alone. Standing alone is the normal case, not an error — most lab
-    samples have never been adopted into inventory.
-
-    Returns identity and labels only; the per-side detail comes from the
-    existing get_material / get_stocked_locations / total_stock /
-    get_lab_sample, rather than a second implementation of them here.
-
-    `limit` applies to each side's search, so a term matching both catalogs
-    can return more rows than `limit` — and deliberately so when one sample
-    code sits inside several material names.
+    Returns identity and labels only; callers fetch detail with the existing
+    per-side queries. `limit` applies to each side, so a term matching both
+    catalogs can return more than `limit` rows.
     """
     materials = search_materials(conn, term, limit)
     lab_samples = search_lab_samples(conn, term, limit)
@@ -216,6 +170,7 @@ def search_warehouse_and_lab(
     paired: set[tuple[int, int]] = set()
 
     def add_pair(pair: sqlite3.Row) -> None:
+        """Append a linked pair once, however many searches found it."""
         key = (pair["material_id"], pair["lab_sample_id"])
         if key in paired:
             return
@@ -242,12 +197,14 @@ def search_warehouse_and_lab(
 
 
 def get_lab_sample(conn: sqlite3.Connection, lab_sample_id: int) -> sqlite3.Row | None:
+    """Return one lab sample's full row, or None."""
     return conn.execute(
         "SELECT * FROM lab_samples WHERE lab_sample_id = ?", (lab_sample_id,)
     ).fetchone()
 
 
 def get_material(conn: sqlite3.Connection, material_id: int) -> sqlite3.Row | None:
+    """Return one material's row with its supplier's canonical name, or None."""
     return conn.execute(
         """
         SELECT m.*, s.canonical_name AS supplier
@@ -260,8 +217,7 @@ def get_material(conn: sqlite3.Connection, material_id: int) -> sqlite3.Row | No
 
 
 def get_lots(conn: sqlite3.Connection, material_id: int) -> list[sqlite3.Row]:
-    """All lots for a material, newest receiving first. Undated lots sort last
-    rather than being treated as oldest."""
+    """Return a material's lots with their locations, newest first and undated last."""
     return conn.execute(
         """
         SELECT l.*,
@@ -278,18 +234,11 @@ def get_lots(conn: sqlite3.Connection, material_id: int) -> list[sqlite3.Row]:
 
 
 def get_stocked_locations(conn: sqlite3.Connection, material_id: int) -> list[sqlite3.Row]:
-    """Where this material can actually be found right now: locations of lots
-    that still have stock and aren't flagged for archive. This is the answer
-    to the everyday R&D question, which is not the same as 'every location
-    this material has ever occupied'.
+    """Return each location holding in-stock, unarchived lots of a material, with stock and lot count.
 
-    On stock figures: the source records one quantity per lot and, separately,
-    the location(s) that lot occupies — it never records how the quantity is
-    split between them. So a lot spanning three locations contributes its
-    full quantity to each row here, and those rows must not be summed. The
-    `lot_spans_locations` flag marks exactly those rows so the UI can say so
-    rather than implying inventory that doesn't exist. Inventing a split
-    (dividing evenly, say) would be fabricating data the company doesn't have.
+    The sheet never records how a lot splits across locations, so a lot in
+    three places counts in full on each row; `lot_spans_locations` marks those
+    rows, which must not be summed. Inventing a split would fabricate data.
     """
     return conn.execute(
         """
@@ -311,8 +260,7 @@ def get_stocked_locations(conn: sqlite3.Connection, material_id: int) -> list[sq
 
 
 def total_stock(conn: sqlite3.Connection, material_id: int) -> float:
-    """Total stock on hand, summed per lot (never per location — see
-    get_stocked_locations)."""
+    """Return a material's stock on hand, summed per lot (never per location)."""
     row = conn.execute(
         """
         SELECT COALESCE(SUM(current_stock), 0)
@@ -326,13 +274,7 @@ def total_stock(conn: sqlite3.Connection, material_id: int) -> float:
 
 
 def unlocated_stock(conn: sqlite3.Connection, material_id: int) -> float:
-    """Stock sitting in lots whose Locations cell was blank.
-
-    This is material the company physically has and cannot find from the
-    record. It has to be reported explicitly: it is counted in the total but
-    has no row in the locations table, so without this the two numbers
-    disagree for no visible reason.
-    """
+    """Return stock in lots with no recorded location: counted in the total, absent from the locations table."""
     row = conn.execute(
         """
         SELECT COALESCE(SUM(current_stock), 0)
@@ -348,10 +290,7 @@ def unlocated_stock(conn: sqlite3.Connection, material_id: int) -> float:
 
 
 def get_last_known_locations(conn: sqlite3.Connection, material_id: int) -> list[sqlite3.Row]:
-    """Fallback for a material with nothing currently in stock: where its most
-    recent lot was stored. 'No stock on hand' is not the same as 'we have no
-    idea where this lives', and the app should not render the second when it
-    only knows the first."""
+    """Return the locations of a material's most recent lot, for when nothing is in stock."""
     return conn.execute(
         """
         SELECT ll.location, l.receiving_date, l.dtf_lot_num
@@ -373,18 +312,10 @@ def get_last_known_locations(conn: sqlite3.Connection, material_id: int) -> list
 
 
 def search_by_location(conn: sqlite3.Connection, prefix: str, limit: int = 200) -> list[sqlite3.Row]:
-    """What is stored at (or under) a location code. A bare aisle prefix like
-    '6L' matches every position in it.
+    """Return in-stock lots at locations matching the typed code (e.g. "6L" for a whole aisle).
 
-    Unlike the material-page queries, this one deliberately does NOT filter
-    out lots flagged Ready To Archive. The two views answer different
-    questions: a material's page answers "can I use this?", where an archived
-    lot is a no, while this answers "what is physically on this shelf?", where
-    the drum really is sitting there and hiding it would make the app
-    disagree with the warehouse. `ready_to_archive` is returned so the caller
-    can label those rows rather than silently mixing them in — the flag comes
-    straight from the sheet's own Ready To Archive column, so this reports
-    what the sheet says and nothing more.
+    Archived lots are included, since they are still physically on the shelf;
+    `ready_to_archive` is returned so the caller can label them.
     """
     if not prefix or not prefix.strip():
         return []
@@ -406,8 +337,7 @@ def search_by_location(conn: sqlite3.Connection, prefix: str, limit: int = 200) 
 
 
 def price_history(conn: sqlite3.Connection, material_id: int) -> list[sqlite3.Row]:
-    """Price per kilo over time — the payoff of storing price on the lot
-    rather than overwriting one number on the material."""
+    """Return (receiving_date, price_per_kilo) for a material's dated, priced lots, oldest first."""
     return conn.execute(
         """
         SELECT receiving_date, price_per_kilo
@@ -421,11 +351,7 @@ def price_history(conn: sqlite3.Connection, material_id: int) -> list[sqlite3.Ro
 
 
 def list_materials(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Every material as one flat table, for a spreadsheet-style overview.
-
-    Stock is summed the same way total_stock() does (in-stock, non-archived
-    lots only) but inlined here as one query instead of one call per row.
-    """
+    """Return every material with its supplier, price and stock (summed as total_stock does)."""
     return conn.execute(
         """
         SELECT m.dtf_part_num, m.material_name, m.category,
@@ -450,16 +376,10 @@ def record_line_catalog(
     material_id: int | None = None,
     rd_id: str | None = None,
 ) -> dict:
-    """Part Number and Price/kg for a flavor-profile line, resolved from the row
-    it references — the Sample Record Sheet's two DB columns (layout §1).
+    """Return {'part_num', 'price_per_kilo'} for a line's referenced catalog row; either may be None.
 
-    A line references a catalog row, it never copies its Part # or price (SPEC
-    Phase F), so both are looked up here at render time and a repriced material
-    flows straight through. Returns {'part_num', 'price_per_kilo'}, either of
-    which may be None: a lab-only sample has no Part #, and a missing price
-    stays None so the renderer can leave the cell blank rather than write 0.
-
-    A typed line (neither id) carries no Part # or price and gets both None.
+    Looked up at render time, so a reprice flows through. A missing price stays
+    None so the sheet shows a blank, never 0.
     """
     if material_id is not None:
         row = conn.execute(
@@ -479,7 +399,9 @@ def record_line_catalog(
 
 
 def database_summary(conn: sqlite3.Connection) -> dict:
+    """Return row counts for the header metrics and the empty-lab-catalog check."""
     def scalar(sql: str) -> int:
+        """Run a single-value query and return the value."""
         return conn.execute(sql).fetchone()[0]
 
     return {
@@ -488,9 +410,6 @@ def database_summary(conn: sqlite3.Connection) -> dict:
         "suppliers": scalar("SELECT COUNT(*) FROM suppliers"),
         "locations": scalar("SELECT COUNT(DISTINCT location) FROM lot_locations"),
         "staged_rows": scalar("SELECT COUNT(*) FROM staging_inventory_raw"),
-        # Loaded by a separate command from a separate sheet, so it is
-        # routinely 0 while the inventory tables are full. The app uses this
-        # to explain an empty Lab Samples tab instead of silently returning
-        # nothing for every search.
+        # Routinely 0: the lab catalog is loaded by its own command.
         "lab_samples": scalar("SELECT COUNT(*) FROM lab_samples"),
     }

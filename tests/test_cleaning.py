@@ -20,7 +20,7 @@ from dtf_materials.cleaning import (
     clean_text,
     is_standard_location,
     is_valid_rd_id,
-    normalize_supplier_key,
+    normalize_key,
     parse_bool_flag,
     parse_category,
     parse_date,
@@ -199,14 +199,14 @@ def test_is_valid_rd_id(raw, expected):
 
 # --- supplier keys -------------------------------------------------------
 
-def test_normalize_supplier_key_ignores_formatting_only_differences():
-    assert normalize_supplier_key("Sensapure Flavors") == normalize_supplier_key(
+def test_normalize_key_ignores_formatting_only_differences():
+    assert normalize_key("Sensapure Flavors") == normalize_key(
         "  sensapure   flavors "
     )
 
 
-def test_normalize_supplier_key_keeps_genuine_differences():
+def test_normalize_key_keeps_genuine_differences():
     """"NutraSci" and "Nutra Sci" may well be the same company, but deciding
     that is a human's call — the ETL only flags it. If this key collapsed
     them, the fuzzy-match finding would never reach the report."""
-    assert normalize_supplier_key("NutraSci") != normalize_supplier_key("Nutra Sci")
+    assert normalize_key("NutraSci") != normalize_key("Nutra Sci")

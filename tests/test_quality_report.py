@@ -21,8 +21,7 @@ SYNTHETIC_CSV = PROJECT_ROOT / "data" / "synthetic" / "raw_material_inventory.cs
 
 @pytest.fixture
 def findings() -> dict:
-    """One finding of several shapes: a plain count, a (row, value) pair, a
-    section whose details are truncated, and one with no details at all."""
+    """Findings of several shapes: plain counts, (row, value) pairs, and a section with no details."""
     f = defaultdict(list)
     f["missing_part_num"] = [4, 34, 36]
     f["conflicting_part_num"] = [("RM-1750", ["malic acid", "niacinamide"], [14, 41])]

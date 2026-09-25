@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from dtf_materials.db import init_db
+from dtf_materials.db import connect, init_db
 
 # Shown when the lab catalog hasn't been loaded. Flush-left because Streamlit
 # renders it as markdown, where an indented line becomes a code block.
@@ -35,14 +35,20 @@ the sample data will always show this message.
 
 
 @st.cache_resource
-def get_conn(db_path: Path) -> sqlite3.Connection:
-    """Return one shared connection, reused across reruns and threads.
+def _apply_schema(db_path: Path) -> None:
+    """Create or update the schema once per app process, so an older database gains new tables."""
+    init_db(db_path).close()
 
-    Safe because the app is the database's only writer (the Flavor Sheet tab).
-    The schema is applied on connect, so a database built before a table
-    existed gains it here instead of failing with "no such table".
+
+def get_conn(db_path: Path) -> sqlite3.Connection:
+    """Open a connection for this page run; runs never share one.
+
+    Streamlit reruns overlap on different threads, and one sqlite3 connection
+    used by two threads at once hands back wrong or missing rows. The flag
+    only allows this run's fragment reruns and callbacks to use it.
     """
-    return init_db(db_path, check_same_thread=False)
+    _apply_schema(db_path)
+    return connect(db_path, check_same_thread=False)
 
 
 def money(value) -> str:
