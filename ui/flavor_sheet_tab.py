@@ -54,7 +54,7 @@ def render(conn: sqlite3.Connection) -> None:
 
     sheet_id = _pick_sheet(conn)
     sheet = fs.get_sheet(conn, sheet_id) if sheet_id is not None else None
-    if sheet is None:
+    if sheet_id is None or sheet is None:
         _render_new_sheet_form(conn)
         return
 
@@ -180,6 +180,7 @@ def _pick_flavor(sheet_id: int, profiles: list) -> int | str:
         ),
         horizontal=True,
     )
+    assert picked is not None
     if picked != open_flavor:
         _open(sheet_id, "new" if picked == ADD_FLAVOR else picked)
         st.rerun()
