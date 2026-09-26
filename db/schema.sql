@@ -270,3 +270,12 @@ CREATE TABLE IF NOT EXISTS flavor_profile_lines (
 
 CREATE INDEX IF NOT EXISTS idx_flavor_profiles_sheet ON flavor_profiles(flavor_sheet_id);
 CREATE INDEX IF NOT EXISTS idx_flavor_profile_lines_profile ON flavor_profile_lines(flavor_profile_id);
+
+-- Phase F (F4): scoops per serving, remembered per product for the labels'
+-- "<n> scoop serving (<g> g)" line. Most products are 1 scoop, so a product
+-- with no row prints 1; a product that differs is changed once and kept.
+-- Authored data, like the flavor sheets: no loader touches it.
+CREATE TABLE IF NOT EXISTS product_scoops (
+    product             TEXT PRIMARY KEY COLLATE NOCASE,   -- flavor sheet header product, trimmed
+    scoops_per_serving  REAL NOT NULL CHECK (scoops_per_serving > 0)
+);

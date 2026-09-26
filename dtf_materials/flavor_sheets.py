@@ -312,3 +312,30 @@ def get_lines(conn: sqlite3.Connection, flavor_profile_id: int) -> list[sqlite3.
         """,
         (flavor_profile_id,),
     ).fetchall()
+
+
+# --- labels (F4) -----------------------------------------------------------
+
+DEFAULT_SCOOPS = 1.0  # most products are one scoop a serving
+
+
+def scoops_per_serving(conn: sqlite3.Connection, product: str | None) -> float:
+    """Return the product's remembered scoops per serving, or DEFAULT_SCOOPS if none is stored."""
+    row = conn.execute(
+        "SELECT scoops_per_serving FROM product_scoops WHERE product = ?",
+        ((product or "").strip(),),
+    ).fetchone()
+    return row["scoops_per_serving"] if row else DEFAULT_SCOOPS
+
+
+def set_scoops_per_serving(conn: sqlite3.Connection, product: str | None, scoops: float) -> None:
+    """Remember a product's scoops per serving; a blank product has nothing to remember it by."""
+    product = (product or "").strip()
+    if not product:
+        return
+    conn.execute(
+        "INSERT INTO product_scoops (product, scoops_per_serving) VALUES (?, ?) "
+        "ON CONFLICT (product) DO UPDATE SET scoops_per_serving = excluded.scoops_per_serving",
+        (product, scoops),
+    )
+    conn.commit()
