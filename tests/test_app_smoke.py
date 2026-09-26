@@ -108,6 +108,25 @@ def test_record_sheet_tab_shows_the_copy_block(db_path):
     assert any("Mystery powder" in w.value for w in at.warning)
 
 
+def test_scoops_per_serving_is_remembered_for_the_product(db_path):
+    conn = db.init_db(db_path)
+    sheet_id = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", servings=30)
+    fs.add_profile(conn, sheet_id, flavor_name="Mango")
+    conn.close()
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.query_params["sheet"] = str(sheet_id)
+    at.run()
+    scoops = next(n for n in at.number_input if n.label == "Scoops per serving")
+    assert scoops.value == 1
+    scoops.set_value(2.0).run()
+
+    assert not at.exception
+    conn = db.connect(db_path)
+    assert fs.scoops_per_serving(conn, "Pre-Workout") == 2
+    conn.close()
+
+
 def test_cost_caption_labels_a_partial_estimate():
     from ui.flavor_sheet_tab import cost_caption
 

@@ -208,7 +208,7 @@ done. The three real templates were received 2026-09-21 and are mapped in
       on the block builder with synthetic profiles: column order and count,
       BASE skipped, D/E/F defaults, blank Part # and blank price stay empty
       fields, a name containing a tab or newline can't shift columns.
-- [ ] **F4. Labels** (unparked 2026-09-24, user's call). Fill the labels
+- [x] **F4. Labels** (unparked 2026-09-24, user's call). Fill the labels
       template `data/real/templates/Sample Labels Blank Template.docx`
       (layout map §3 — the text is in a 5×3 table, not the shapes) from a
       flavor sheet: **one label per flavor profile**, in the sheet's order,

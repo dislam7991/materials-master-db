@@ -17,6 +17,7 @@ import streamlit as st
 from streamlit_searchbox import st_searchbox
 
 from dtf_materials import flavor_sheets as fs
+from dtf_materials import labels_docx
 from dtf_materials import queries as q
 from dtf_materials.flavor_sheet_xlsx import DEFAULT_TEMPLATE_PATH as TEMPLATE_PATH
 from dtf_materials.flavor_sheet_xlsx import Flavor
@@ -26,6 +27,7 @@ from ui.common import money
 NEW_SHEET = "➕ Start a new flavor sheet…"
 ADD_FLAVOR = "➕ Add a flavor"
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 # The line table: which columns are read-only, and how each is shown.
 LINE_TABLE_READ_ONLY = ["Material", "Source", "g / sample", "Price / kg", "Cost / serving"]
@@ -70,6 +72,7 @@ def render(conn: sqlite3.Connection) -> None:
     if sheet["servings"] is None:
         st.warning("Servings per flavor is blank, so the sheet can't work out any grams. Set it in the details above.")
     _render_download_and_delete(conn, sheet, profiles)
+    _render_labels(conn, sheet, profiles)
 
 
 # --- URL state ---------------------------------------------------------------
@@ -411,6 +414,11 @@ def cost_caption(cost: dict, servings) -> str | None:
 
 # --- download / delete -------------------------------------------------------
 
+def _file_stem(sheet) -> str:
+    """Return the sheet's product line made safe for a file name."""
+    return re.sub(r'[\\/:*?"<>|]+', "-", fs.product_line(sheet) or "untitled")
+
+
 def _build_workbook(conn: sqlite3.Connection, sheet_id: int) -> bytes:
     """Render the sheet to .xlsx from what's in the database right now (called on Download)."""
     sheet = fs.get_sheet(conn, sheet_id)
@@ -441,11 +449,10 @@ def _render_download_and_delete(conn: sqlite3.Connection, sheet, profiles: list)
             "template there (the folder is gitignored) to enable downloads."
         )
     elif profiles:
-        file_stem = re.sub(r'[\\/:*?"<>|]+', "-", fs.product_line(sheet) or "untitled")
         c_download.download_button(
             "Download Flavor Sheet (.xlsx)",
             data=partial(_build_workbook, conn, sheet_id),
-            file_name=f"Flavor Sheet - {file_stem}.xlsx",
+            file_name=f"Flavor Sheet - {_file_stem(sheet)}.xlsx",
             mime=XLSX_MIME,
             type="primary",
             on_click="ignore",
@@ -457,3 +464,43 @@ def _render_download_and_delete(conn: sqlite3.Connection, sheet, profiles: list)
             fs.delete_sheet(conn, sheet_id)
             _open(None)
             st.rerun()
+
+
+# --- labels --------------------------------------------------------------------
+
+def _build_labels(conn: sqlite3.Connection, sheet_id: int, index: int) -> bytes:
+    """Render the sheet's labels from the database right now and return document `index` (called on Download)."""
+    return labels_docx.render(labels_docx.labels_for_sheet(conn, sheet_id), labels_docx.DEFAULT_TEMPLATE_PATH)[index]
+
+
+def _render_labels(conn: sqlite3.Connection, sheet, profiles: list) -> None:
+    """Draw the scoops-per-serving field and one Download Labels button per ten flavors."""
+    sheet_id, product = sheet["flavor_sheet_id"], sheet["product"]
+    c_scoops, c_download = st.columns([1, 3])
+    stored = fs.scoops_per_serving(conn, product)
+    scoops = c_scoops.number_input(
+        "Scoops per serving", min_value=0.5, step=0.5, value=float(stored), format="%g",
+        key=f"scoops_{sheet_id}_{product}", disabled=not (product or "").strip(),
+        help="Printed on the labels. Remembered for this product; most are 1.",
+    )
+    if scoops != stored:
+        fs.set_scoops_per_serving(conn, product, scoops)
+
+    if not labels_docx.DEFAULT_TEMPLATE_PATH.exists():
+        c_download.error(
+            f"No labels template at `{labels_docx.DEFAULT_TEMPLATE_PATH}`. Copy the company "
+            "template there (the folder is gitignored) to enable label downloads."
+        )
+        return
+    per_doc = labels_docx.LABELS_PER_DOCUMENT
+    for index, start in enumerate(range(0, len(profiles), per_doc)):
+        last = min(start + per_doc, len(profiles))
+        suffix = f" {start + 1}-{last}" if len(profiles) > per_doc else ""
+        c_download.download_button(
+            f"Download Labels{suffix} (.docx)",
+            data=partial(_build_labels, conn, sheet_id, index),
+            file_name=f"Labels - {_file_stem(sheet)}{suffix}.docx",
+            mime=DOCX_MIME,
+            on_click="ignore",
+            key=f"labels_{sheet_id}_{index}",
+        )
