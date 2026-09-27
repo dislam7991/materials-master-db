@@ -10,6 +10,7 @@ writes: a sheet is saved work.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import date
 
@@ -339,3 +340,60 @@ def set_scoops_per_serving(conn: sqlite3.Connection, product: str | None, scoops
         (product, scoops),
     )
     conn.commit()
+
+
+# --- snapshots at download (F2h) -------------------------------------------
+
+def _sheet_numbers(conn: sqlite3.Connection, flavor_sheet_id: int) -> dict:
+    """Return everything a download prints, resolved as of now: header, scoops, profiles and lines with prices."""
+    sheet = get_sheet(conn, flavor_sheet_id)
+    return {
+        "header": {k: sheet[k] for k in HEADER_FIELDS},
+        "scoops_per_serving": scoops_per_serving(conn, sheet["product"]),
+        "profiles": [
+            {
+                "flavor_name": p["flavor_name"],
+                "sample_id": p["sample_id"],
+                "base_mg": p["base_mg"],
+                "lines": [
+                    {k: l[k] for k in ("name", "source", "mg_per_serving", "price_per_kilo")}
+                    for l in get_lines(conn, p["flavor_profile_id"])
+                ],
+            }
+            for p in get_profiles(conn, flavor_sheet_id)
+        ],
+    }
+
+
+def take_snapshot(conn: sqlite3.Connection, flavor_sheet_id: int, kind: str) -> int | None:
+    """Store what a download of `kind` is rendered from, timestamped, and return its id (None if no such sheet).
+
+    Called on every download, so a reprint after a reprice is a second
+    snapshot beside the first, never an overwrite of it. `kind` is
+    'flavor_sheet' or 'labels'; the schema rejects anything else.
+    """
+    if get_sheet(conn, flavor_sheet_id) is None:
+        return None
+    cur = conn.execute(
+        "INSERT INTO flavor_sheet_snapshots (flavor_sheet_id, kind, data) VALUES (?,?,?)",
+        (flavor_sheet_id, kind, json.dumps(_sheet_numbers(conn, flavor_sheet_id))),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def list_snapshots(conn: sqlite3.Connection, flavor_sheet_id: int) -> list[sqlite3.Row]:
+    """Return a sheet's snapshots (id, kind, taken_at), oldest first."""
+    return conn.execute(
+        "SELECT snapshot_id, kind, taken_at FROM flavor_sheet_snapshots "
+        "WHERE flavor_sheet_id = ? ORDER BY snapshot_id",
+        (flavor_sheet_id,),
+    ).fetchall()
+
+
+def get_snapshot(conn: sqlite3.Connection, snapshot_id: int) -> dict | None:
+    """Return one snapshot's numbers as stored, or None if it doesn't exist."""
+    row = conn.execute(
+        "SELECT data FROM flavor_sheet_snapshots WHERE snapshot_id = ?", (snapshot_id,)
+    ).fetchone()
+    return json.loads(row["data"]) if row else None

@@ -190,6 +190,67 @@ def test_lines_resolve_price_from_each_source_and_a_reprice_flows_through(conn):
     assert fs.get_lines(conn, profile)[0]["price_per_kilo"] == 55.0
 
 
+
+# --- snapshots at download (F2h) ---------------------------------------------
+
+def _priced_sheet(conn, price):
+    """A one-flavor sheet with one warehouse line at `price`; returns (sheet_id, material_id)."""
+    material_id = _seed_material(conn, "Caffeine")
+    conn.execute(
+        "UPDATE materials SET current_price_per_kilo = ? WHERE material_id = ?", (price, material_id)
+    )
+    conn.commit()
+    sheet = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", servings=4)
+    profile = fs.add_profile(conn, sheet, "Peach", "X260927-01", base_mg=8400)
+    fs.add_line(conn, profile, material_id=material_id, mg_per_serving=200)
+    return sheet, material_id
+
+
+def test_a_reprice_between_downloads_makes_two_snapshots_and_keeps_the_first(conn):
+    sheet, material_id = _priced_sheet(conn, 42.5)
+    first = fs.take_snapshot(conn, sheet, "flavor_sheet")
+
+    conn.execute(
+        "UPDATE materials SET current_price_per_kilo = 55.0 WHERE material_id = ?", (material_id,)
+    )
+    conn.commit()
+    second = fs.take_snapshot(conn, sheet, "flavor_sheet")
+
+    assert [s["snapshot_id"] for s in fs.list_snapshots(conn, sheet)] == [first, second]
+    old, new = fs.get_snapshot(conn, first), fs.get_snapshot(conn, second)
+    assert old != new
+    assert old["profiles"][0]["lines"][0]["price_per_kilo"] == 42.5
+    assert new["profiles"][0]["lines"][0]["price_per_kilo"] == 55.0
+    # Timestamps tell the two downloads apart.
+    stamps = [s["taken_at"] for s in fs.list_snapshots(conn, sheet)]
+    assert stamps[0] <= stamps[1]
+
+
+def test_a_snapshot_holds_what_the_download_prints(conn):
+    sheet, _ = _priced_sheet(conn, 42.5)
+    fs.set_scoops_per_serving(conn, "Pre-Workout", 2)
+    snap = fs.get_snapshot(conn, fs.take_snapshot(conn, sheet, "labels"))
+    assert snap["header"]["customer"] == "Acme"
+    assert snap["header"]["servings"] == 4
+    assert snap["scoops_per_serving"] == 2
+    assert snap["profiles"] == [{
+        "flavor_name": "Peach", "sample_id": "X260927-01", "base_mg": 8400,
+        "lines": [{"name": "Caffeine", "source": "Warehouse",
+                   "mg_per_serving": 200, "price_per_kilo": 42.5}],
+    }]
+    assert fs.list_snapshots(conn, sheet)[0]["kind"] == "labels"
+
+
+def test_snapshot_edge_cases(conn):
+    assert fs.take_snapshot(conn, 999, "labels") is None
+    assert fs.get_snapshot(conn, 999) is None
+    sheet, _ = _priced_sheet(conn, 42.5)
+    with pytest.raises(sqlite3.IntegrityError):
+        fs.take_snapshot(conn, sheet, "record_sheet")
+    fs.take_snapshot(conn, sheet, "flavor_sheet")
+    fs.delete_sheet(conn, sheet)
+    assert conn.execute("SELECT COUNT(*) FROM flavor_sheet_snapshots").fetchone()[0] == 0
+
 def test_profile_cost_sums_priced_lines_and_flags_the_rest(conn):
     material_id = _seed_material(conn, "Caffeine")
     conn.execute(

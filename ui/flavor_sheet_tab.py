@@ -420,10 +420,14 @@ def _file_stem(sheet) -> str:
 
 
 def _build_workbook(conn: sqlite3.Connection, sheet_id: int) -> bytes:
-    """Render the sheet to .xlsx from what's in the database right now (called on Download)."""
+    """Render the sheet to .xlsx from what's in the database right now (called on Download).
+
+    Snapshots the numbers once it renders (F2h), so a reprint after a reprice
+    can be told apart from the copy already sent.
+    """
     sheet = fs.get_sheet(conn, sheet_id)
     assert sheet is not None
-    return render_flavor_sheet(
+    workbook = render_flavor_sheet(
         fs.product_line(sheet),
         sheet["servings"],
         [
@@ -437,6 +441,8 @@ def _build_workbook(conn: sqlite3.Connection, sheet_id: int) -> bytes:
         ],
         TEMPLATE_PATH,
     )
+    fs.take_snapshot(conn, sheet_id, "flavor_sheet")
+    return workbook
 
 
 def _render_download_and_delete(conn: sqlite3.Connection, sheet, profiles: list) -> None:
@@ -469,8 +475,13 @@ def _render_download_and_delete(conn: sqlite3.Connection, sheet, profiles: list)
 # --- labels --------------------------------------------------------------------
 
 def _build_labels(conn: sqlite3.Connection, sheet_id: int, index: int) -> bytes:
-    """Render the sheet's labels from the database right now and return document `index` (called on Download)."""
-    return labels_docx.render(labels_docx.labels_for_sheet(conn, sheet_id), labels_docx.DEFAULT_TEMPLATE_PATH)[index]
+    """Render the sheet's labels from the database right now and return document `index` (called on Download).
+
+    Snapshots the numbers once it renders (F2h), like the flavor sheet download.
+    """
+    document = labels_docx.render(labels_docx.labels_for_sheet(conn, sheet_id), labels_docx.DEFAULT_TEMPLATE_PATH)[index]
+    fs.take_snapshot(conn, sheet_id, "labels")
+    return document
 
 
 def _render_labels(conn: sqlite3.Connection, sheet, profiles: list) -> None:

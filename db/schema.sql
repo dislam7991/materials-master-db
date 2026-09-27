@@ -279,3 +279,19 @@ CREATE TABLE IF NOT EXISTS product_scoops (
     product             TEXT PRIMARY KEY COLLATE NOCASE,   -- flavor sheet header product, trimmed
     scoops_per_serving  REAL NOT NULL CHECK (scoops_per_serving > 0)
 );
+
+-- Phase F (F2h): what a download was rendered from. References are right for
+-- editing (a reprice reaches every sheet), wrong for a copy already sent: a
+-- reprint after a reprice must be told apart from, and compared with, the
+-- copy on someone's desk. So each download stores the numbers it printed,
+-- prices included, as JSON — a frozen record, never read back into the sheet.
+-- Authored data: no loader touches it. Goes with its sheet on delete.
+CREATE TABLE IF NOT EXISTS flavor_sheet_snapshots (
+    snapshot_id      INTEGER PRIMARY KEY,
+    flavor_sheet_id  INTEGER NOT NULL REFERENCES flavor_sheets(flavor_sheet_id) ON DELETE CASCADE,
+    kind             TEXT NOT NULL CHECK (kind IN ('flavor_sheet', 'labels')),
+    taken_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    data             TEXT NOT NULL   -- JSON: header, scoops per serving, profiles with resolved lines
+);
+
+CREATE INDEX IF NOT EXISTS idx_flavor_sheet_snapshots_sheet ON flavor_sheet_snapshots(flavor_sheet_id);
