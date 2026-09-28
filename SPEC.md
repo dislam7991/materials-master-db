@@ -652,6 +652,17 @@ flag, don't guess). Decision + why; the detail is in git history if needed.
   exactly one writer, never point a loader at a sync-touched folder. Collides
   with "no scheduled ETL daemon" — revisit that explicitly if daily
   auto-refresh is wanted, don't drift into a scheduler.
+- **The sheet's `Not Found` lookup text loads as data.** Several real-sheet
+  columns (Receiving Date, Material Name, possibly more) are formulas that
+  look the row's DTF Lot # up in the `Rec` tabs and print the text
+  `Not Found` when it isn't there. The 2026-09-28 mirror had well over a
+  thousand such cells. A date column already fails to parse and gets flagged,
+  but a material name of `Not Found` loads as if it were real. Worse, the
+  upsert keeps any non-null name (`COALESCE(excluded.material_name, …)` in
+  `etl.py`), so a `Not Found` row can overwrite a good name. Proposed fix:
+  `clean_text` treats that exact text as missing, and the quality report
+  counts it per column, citing source rows ("lookup found no receiving
+  record"). The fix is the user's call to promote.
 - **Aisle search is a substring match, not an anchored prefix.**
   `search_by_location`'s pattern keeps a leading wildcard, so `6L` matches
   `A6L-99-Z`. One-line fix, but a behavior change for anyone typing fragments,
