@@ -652,6 +652,16 @@ flag, don't guess). Decision + why; the detail is in git history if needed.
   exactly one writer, never point a loader at a sync-touched folder. Collides
   with "no scheduled ETL daemon" — revisit that explicitly if daily
   auto-refresh is wanted, don't drift into a scheduler.
+- **The sheet's `Not Found` lookup text: latent, not felt.** Some
+  real-sheet columns are formulas that print the text `Not Found` when the
+  row's DTF Lot # isn't on any `Rec` tab. On 2026-09-28 almost all of these
+  were in an unnamed column that the ETL never reads. One was in Receiving
+  Date, where it fails to parse and the quality report flags it. None were
+  in Material Name, but that column can produce one too. If it ever does,
+  it would load as a real name, and the upsert's
+  `COALESCE(excluded.material_name, …)` would let it overwrite a good name.
+  Fix then: `clean_text` treats that exact text as missing, and the report
+  counts it. Revisit when a material shows up named `Not Found`.
 - **Aisle search is a substring match, not an anchored prefix.**
   `search_by_location`'s pattern keeps a leading wildcard, so `6L` matches
   `A6L-99-Z`. One-line fix, but a behavior change for anyone typing fragments,
