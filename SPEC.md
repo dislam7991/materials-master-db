@@ -448,8 +448,9 @@ it's stale.
    (it blocks everything stacked behind it). Never skip, disable or delete a
    test to get green.
 2. Fewer than 3 open automation PRs → take the next unchecked box in the
-   checklists (section 4 Status, then Parked), top to bottom, Phase A→B→E→D→F,
-   skipping Parked and Phase G. A task covered by an open PR is done.
+   section 4 checklists, top to bottom, Phase A→B→E→D→F. Never take a box
+   under Parked (Phase F's parked list, Phase C) or Phase G until the user
+   unparks it in a reviewed PR. A task covered by an open PR is done.
 3. 3 open automation PRs → stop taking work. Write the log, Slack which PR to
    merge first. Review is the bottleneck; stopping on a full queue is correct.
 
@@ -480,15 +481,17 @@ missing tool, not a failed run; say so in the summary.
 **Never commit** `db/*.db`, `data/real/`, `config.local.toml`, service account
 keys, or any real material name, price, supplier or client.
 
-**Nothing outside the checklists is a queue.** Parked Phase C and the Backlog
-are held deliberately and carry no `- [ ]` boxes for a reason; never promote
-work out of them. Moving something into a checklist is the user's call, in a
+**Nothing outside the active checklists is a queue.** Parked tasks keep their
+`- [ ]` boxes because none of them is done, but they are not the queue; neither
+is Phase G or the Backlog. Never promote work out of them. Moving something into a checklist is the user's call, in a
 reviewed PR (as Phase F was on 2026-09-21).
 
-**When the checklists are finished** (every box in section 4 checked, Parked
-skipped): touch no code, write the log, Slack that the spec is complete, stop.
-Do not invent new tasks — section 5 (out of scope) and the Backlog exist for
-exactly this.
+**When the active checklist is finished** (every box outside Parked and
+Phase G checked on `master`): touch no code, write the log, and alert the user
+— Slack and a push notification — that everything is done and the rest is
+waiting on them to unpark a task. Stop. While the last box is only in an open
+PR, it is waiting on review, not finished. Do not invent new tasks — section 5
+(out of scope) and the Backlog exist for exactly this.
 
 ## Parked — Phase C (sample requests)
 
