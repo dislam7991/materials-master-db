@@ -5,18 +5,18 @@
 ## [5] Rows with no DTF Part # (can't be linked to a material):
 
 ```
-source rows: [4, 34, 36, 62, 88]
+source rows: [5, 35, 37, 63, 89]
 ```
 
 ## [6] DTF Part #s reused across different material names:
 
 ```
-FL-7126: ['green apple flavor art', 'methylcobalamin (b12) 1%']  (source rows: [3, 65, 67])
-FL-6310: ['lemonade flavor nat', 'orange cream flavor n&a']  (source rows: [7, 74, 79, 91])
-RM-1750: ['malic acid', 'methylcobalamin (b12) 1%']  (source rows: [14, 41, 58, 102])
-RM-7201: ['l-carnitine tartrate', 'niacinamide']  (source rows: [17, 32, 73])
-RM-6881: ['ashwagandha extract ksm-66', 'creatine monohydrate']  (source rows: [20, 53, 72, 81])
-RM-7227: ['bitter blocker bb-40', 'sodium citrate']  (source rows: [49, 78, 83])
+FL-7126: ['green apple flavor art', 'methylcobalamin (b12) 1%']  (source rows: [4, 66, 68])
+FL-6310: ['lemonade flavor nat', 'orange cream flavor n&a']  (source rows: [8, 75, 80, 92])
+RM-1750: ['malic acid', 'methylcobalamin (b12) 1%']  (source rows: [15, 42, 59, 103])
+RM-7201: ['l-carnitine tartrate', 'niacinamide']  (source rows: [18, 33, 74])
+RM-6881: ['ashwagandha extract ksm-66', 'creatine monohydrate']  (source rows: [21, 54, 73, 82])
+RM-7227: ['bitter blocker bb-40', 'sodium citrate']  (source rows: [50, 79, 84])
 ```
 
 ## [22] Part #s listed under more than one supplier (only the first is kept on the material row):
@@ -37,8 +37,8 @@ RM-7201: ['nutra sci', 'nutrasci', 'prinova usa']
 ## [4] Locations not matching the expected code format (e.g. 6L-27-D) or a known named location:
 
 ```
-'BACK COOLER'  x3  (rows [29, 37, 97])
-'3R-24-'  x1  (rows [64])
+'BACK COOLER'  x3  (rows [30, 38, 98])
+'3R-24-'  x1  (rows [65])
 -> a repeated value here is usually a real named location to whitelist;
    a one-off is usually a typo.
 ```
@@ -66,11 +66,11 @@ RM-7201: ['nutra sci', 'nutrasci', 'prinova usa']
 ## [5] Prices that couldn't be parsed as numbers:
 
 ```
-row 12: 'TBD'
-row 40: 'TBD'
-row 88: 'call'
-row 97: 'call'
-row 101: 'call'
+row 13: 'TBD'
+row 41: 'TBD'
+row 89: 'call'
+row 98: 'call'
+row 102: 'call'
 ```
 
 ## [11] Rows with a blank price.

@@ -153,3 +153,16 @@ def test_two_consecutive_runs_produce_identical_tables(db_path, source_rows):
     assert second_stats.materials_created == 0
     assert second_stats.materials_updated == first_stats.materials_created
     assert second_stats.lots_created == first_stats.lots_created
+
+
+def test_source_row_is_the_sheet_row_number(db_path, source_rows):
+    """The quality report cites source_row, so it must match the row a human sees in the sheet (header is row 1)."""
+    etl.run(ListSource(source_rows), db_path)
+    conn = connect(db_path)
+    try:
+        first, last = conn.execute(
+            "SELECT MIN(source_row), MAX(source_row) FROM staging_inventory_raw"
+        ).fetchone()
+    finally:
+        conn.close()
+    assert (first, last) == (2, len(source_rows) + 1)

@@ -80,7 +80,7 @@ def stage(conn: sqlite3.Connection, source: InventorySource, stats: LoadStats) -
     columns = ", ".join(["source_row", *STAGING_COLUMNS.values()])
     placeholders = ", ".join("?" * (len(STAGING_COLUMNS) + 1))
     sql = f"INSERT INTO staging_inventory_raw ({columns}) VALUES ({placeholders})"
-    for i, row in enumerate(rows, start=1):
+    for i, row in enumerate(rows, start=2):
         conn.execute(sql, (i, *(row.get(header) for header in STAGING_COLUMNS)))
         stats.staged_rows += 1
 
