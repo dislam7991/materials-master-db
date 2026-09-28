@@ -2,14 +2,14 @@
 
 One file per day the automation runs: `YYYY-MM-DD.md`.
 
-These go straight to `master` without review (SPEC.md §7.6), so the record
+These go straight to `master` without review (SPEC.md §6, "The run log"), so the record
 lands whether or not anyone reviews a PR that day. If you've been away since
 Friday, this is where you find out what happened.
 
 ## Merging a stack
 
 **Merge the oldest open PR first.** Every task ticks a box in SPEC.md section
-5, so when the automation stacks a task on an unmerged one, both branches touch
+4, so when the automation stacks a task on an unmerged one, both branches touch
 that file. Out-of-order merges mean resolving conflicts for no reason.
 
 Each entry names its PR's base branch, so the order is recoverable: a PR based
