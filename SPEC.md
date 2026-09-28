@@ -240,7 +240,7 @@ done. The three real templates were received 2026-09-21 and are mapped in
       a new product defaults to 1 scoop, a changed count is remembered per
       product, a blank field prints empty, never
       `None`.
-- [ ] **F2h. Snapshot at download** (moved from F4; narrowed 2026-09-24 —
+- [x] **F2h. Snapshot at download** (moved from F4; narrowed 2026-09-24 —
       the record sheet has no download any more, and the app can't see a
       copy). Each download of a flavor sheet or of labels (F4) stores the
       numbers it was rendered from (prices included) with a timestamp, so a
