@@ -253,8 +253,8 @@ done. The three real templates were received 2026-09-21 and are mapped in
       1. **All Materials Lookup** (was "Warehouse + Lab")
       2. **Warehouse Lookup** (was "Material lookup")
       3. **R&D Lab Lookup** (was "Lab Samples")
-      4. **What's in a location** (unchanged)
-      5. **Inventory Table View** (was "All materials")
+      4. **Location Lookup** (was "What's in a location")
+      5. **Inventory Table** (was "All materials")
       6. **Flavor Sheet** (unchanged)
       7. **Sample Record Sheet** (unchanged)
       Labels and order only. No tab's behavior changes. Change the `st.tabs`
