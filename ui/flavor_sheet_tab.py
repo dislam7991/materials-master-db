@@ -7,6 +7,7 @@ changes, on a reconnect or on a reload, and the URL survives all three.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import sqlite3
 from datetime import date
@@ -24,7 +25,8 @@ from dtf_materials.flavor_sheet_xlsx import Flavor
 from dtf_materials.flavor_sheet_xlsx import render as render_flavor_sheet
 from ui.common import money
 
-NEW_SHEET = "➕ Start a new flavor sheet…"
+FOLDER_STATE = "flavor_sheet_folder"   # (customer key, quote folder key) being browsed; None = not chosen
+SEARCH_KEY = "flavor_sheet_search"
 ADD_FLAVOR = "➕ Add a flavor"
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -46,20 +48,30 @@ LINE_TABLE_COLUMNS = {
 
 
 def render(conn: sqlite3.Connection) -> None:
-    """Draw the tab: sheet picker, then either the new-sheet form or the open sheet."""
+    """Draw the tab: search, folder path, then either a folder's contents or the open sheet."""
     st.write(
         "Fill in the Flavor Sheet: customer, product, quote ID and servings once, "
         "then each flavor's materials in mg per serving. Grams per sample are "
         "worked out for you, and **Download** fills in the company template "
-        "(four flavors to a page)."
+        "(four flavors to a page). Saved sheets are filed by customer, then "
+        "product · quote ID."
     )
 
-    sheet_id = _pick_sheet(conn)
-    sheet = fs.get_sheet(conn, sheet_id) if sheet_id is not None else None
-    if sheet_id is None or sheet is None:
-        _render_new_sheet_form(conn)
+    open_id = _url_id("sheet")
+    sheet = fs.get_sheet(conn, open_id) if open_id is not None else None
+    if sheet is not None:
+        # Going up from an open sheet lands in its own folder, even after a reload.
+        st.session_state[FOLDER_STATE] = fs.sheet_folder(sheet)
+
+    _render_search(conn)
+    tree = fs.folders(conn)
+    customer, quote = _browsed(tree)
+    _render_breadcrumbs(customer, quote, sheet)
+    if sheet is None:
+        _render_folder(conn, tree, customer, quote)
         return
 
+    sheet_id = sheet["flavor_sheet_id"]
     _render_sheet_details(conn, sheet)
     profiles = fs.get_profiles(conn, sheet_id)
     picked = _pick_flavor(sheet_id, profiles)
@@ -92,30 +104,168 @@ def _open(sheet_id: int | None, flavor: int | str | None = None) -> None:
         st.query_params["flavor"] = str(flavor)
 
 
-# --- sheet level -------------------------------------------------------------
+# --- folders and search (F6a) ------------------------------------------------
+#
+# Which folder is being browsed lives in session state, not the URL: it holds
+# customer names, and an open sheet re-derives it from its own header anyway.
 
-def _pick_sheet(conn: sqlite3.Connection) -> int | None:
-    """Draw the sheet picker and return the open sheet's id (None for a new sheet)."""
-    sheet_labels = {
-        s["flavor_sheet_id"]: f"{fs.product_line(s) or '(untitled)'} · {s['created_at'][:10]}"
-        for s in fs.list_sheets(conn)
-    }
-    options: list[int | str] = [NEW_SHEET, *sheet_labels]
-    open_id = _url_id("sheet")
-    if open_id not in sheet_labels:
-        open_id = None
-    picked = st.selectbox(
-        "Flavor sheet",
-        options,
-        index=options.index(open_id if open_id is not None else NEW_SHEET),
-        format_func=lambda c: NEW_SHEET if c == NEW_SHEET else sheet_labels[c],
+def _go(customer_key: str | None, quote_key: tuple[str, str] | None = None) -> None:
+    """Browse a folder (None, None = all customers), closing any open sheet. Used as a button callback."""
+    st.session_state[FOLDER_STATE] = (customer_key, quote_key)
+    _open(None)
+
+
+def _open_sheet(sheet_id: int) -> None:
+    """Open a sheet and clear the search box. Used as a button callback."""
+    st.session_state[SEARCH_KEY] = ""
+    _open(sheet_id)
+
+
+def _browsed(tree: list[dict]) -> tuple[dict | None, dict | None]:
+    """Return the customer and quote folder being browsed, dropping a level that no longer exists."""
+    customer_key, quote_key = st.session_state.get(FOLDER_STATE, (None, None))
+    customer = next((c for c in tree if c["key"] == customer_key), None)
+    quote = next((f for f in customer["quotes"] if f["key"] == quote_key), None) if customer else None
+    return customer, quote
+
+
+def _customer_label(customer: dict) -> str:
+    """Return a customer folder's name, or its "(no customer)" placeholder."""
+    return customer["customer"] or fs.BLANK_LABELS["customer"]
+
+
+def _quote_label(quote: dict) -> str:
+    """Return a quote folder's name as "Product · Quote ID", with placeholders for blanks."""
+    return f"{quote['product'] or fs.BLANK_LABELS['product']} · {quote['quote_id'] or fs.BLANK_LABELS['quote_id']}"
+
+
+def _sheet_label(entry: dict) -> str:
+    """Return a sheet's line in a folder: its date and flavors."""
+    titles = [_profile_title(p) for p in entry["profiles"]]
+    flavors = ", ".join(titles[:4]) + (f", +{len(titles) - 4} more" if len(titles) > 4 else "")
+    return f"{entry['sheet']['created_at'][:10]} · {len(titles)} flavor(s)" + (f": {flavors}" if titles else "")
+
+
+def _render_search(conn: sqlite3.Connection) -> None:
+    """Draw the search box and, for a term, every matching sheet with its folder path."""
+    term = st.text_input(
+        "Search flavor sheets", key=SEARCH_KEY,
+        placeholder="Customer, product, quote ID, flavor name or Sample ID",
     )
-    picked_id: int | None = None if picked == NEW_SHEET else int(picked)  # type: ignore[arg-type]
-    if picked_id != open_id:
-        _open(picked_id)
-        st.rerun()
-    return open_id
+    if not term.strip():
+        return
+    hits = fs.search_sheets(conn, term)
+    if not hits:
+        st.caption(f"No flavor sheet matches “{term.strip()}”.")
+    for entry in hits:
+        sheet = entry["sheet"]
+        path = " › ".join((
+            sheet["customer"] or fs.BLANK_LABELS["customer"],
+            f"{sheet['product'] or fs.BLANK_LABELS['product']} · {sheet['quote_id'] or fs.BLANK_LABELS['quote_id']}",
+        ))
+        st.button(
+            f"📄 {path} › {_sheet_label(entry)}", key=f"hit_{sheet['flavor_sheet_id']}",
+            on_click=_open_sheet, args=(sheet["flavor_sheet_id"],), type="tertiary",
+        )
+    st.divider()
 
+
+def _render_breadcrumbs(customer: dict | None, quote: dict | None, sheet) -> None:
+    """Draw the folder path as buttons; the last step is where you are, so it's not a button."""
+    crumbs: list[tuple[str, tuple]] = [("All customers", (None, None))]
+    if customer is not None:
+        crumbs.append((f"📁 {_customer_label(customer)}", (customer["key"], None)))
+    if quote is not None:
+        crumbs.append((f"📁 {_quote_label(quote)}", (customer["key"], quote["key"])))  # type: ignore[index]
+    here = f"📄 {sheet['created_at'][:10]}" if sheet is not None else None
+
+    with st.container(horizontal=True, vertical_alignment="center"):
+        for i, (label, target) in enumerate(crumbs):
+            last = here is None and i == len(crumbs) - 1
+            st.button(
+                label if i == 0 else f"› {label}", key=f"crumb_{i}",
+                on_click=_go, args=target, type="tertiary", disabled=last,
+            )
+        if here is not None:
+            st.button(f"› {here}", key="crumb_sheet", type="tertiary", disabled=True)
+
+
+def _render_folder(conn: sqlite3.Connection, tree: list[dict], customer: dict | None, quote: dict | None) -> None:
+    """Draw the browsed folder: a new-sheet form pre-filled from it, a rename, and its contents."""
+    if customer is None:
+        _render_new_sheet_form(conn, {}, "new_sheet", expanded=not tree)
+        if not tree:
+            st.info("No flavor sheets yet. Start one above.")
+        _folder_grid([(f"📁 {_customer_label(c)}", _sheet_count(c), (c["key"], None)) for c in tree])
+        return
+
+    if quote is None:
+        _render_new_sheet_form(conn, {"customer": customer["customer"]}, _form_key(customer["key"]))
+        _render_rename_customer(conn, customer)
+        _folder_grid([(f"📁 {_quote_label(f)}", len(f["sheets"]), (customer["key"], f["key"]))
+                      for f in customer["quotes"]])
+        return
+
+    newest = quote["sheets"][0]["sheet"]
+    _render_new_sheet_form(conn, {k: newest[k] for k in fs.HEADER_FIELDS}, _form_key(customer["key"], quote["key"]))
+    _render_rename_quote(conn, customer, quote)
+    for entry in quote["sheets"]:
+        st.button(
+            f"📄 {_sheet_label(entry)}", key=f"open_{entry['sheet']['flavor_sheet_id']}",
+            on_click=_open_sheet, args=(entry["sheet"]["flavor_sheet_id"],), width="stretch",
+        )
+
+
+def _sheet_count(customer: dict) -> int:
+    """Return how many sheets are filed under a customer."""
+    return sum(len(f["sheets"]) for f in customer["quotes"])
+
+
+def _folder_grid(folders: list[tuple[str, int, tuple]]) -> None:
+    """Draw folder buttons three to a row, each with its sheet count."""
+    cols = st.columns(3)
+    for i, (label, count, target) in enumerate(folders):
+        cols[i % 3].button(
+            f"{label} · {count} sheet{'s' if count != 1 else ''}", key=f"folder_{i}",
+            on_click=_go, args=target, width="stretch",
+        )
+
+
+def _form_key(*folder) -> str:
+    """Return a widget-key prefix unique to a folder, so its pre-filled form doesn't reuse another's values."""
+    return "new_sheet_" + hashlib.md5(repr(folder).encode()).hexdigest()[:8]
+
+
+def _render_rename_customer(conn: sqlite3.Connection, customer: dict) -> None:
+    """Draw the rename popover for a customer folder."""
+    count = _sheet_count(customer)
+    with st.popover("Rename folder"):
+        with st.form(f"rename_{_form_key(customer['key'])}"):
+            new = st.text_input("Customer", value=customer["customer"] or "")
+            st.caption(f"Changes the customer on all {count} sheet(s) here. Renaming to another "
+                       "folder's name merges the two.")
+            if st.form_submit_button("Rename", type="primary"):
+                fs.rename_customer(conn, customer["key"], new)
+                st.session_state[FOLDER_STATE] = (fs.folder_key(new), None)
+                st.rerun()
+
+
+def _render_rename_quote(conn: sqlite3.Connection, customer: dict, quote: dict) -> None:
+    """Draw the rename popover for a Product · Quote ID folder."""
+    with st.popover("Rename folder"):
+        with st.form(f"rename_{_form_key(customer['key'], quote['key'])}"):
+            c1, c2 = st.columns(2)
+            product = c1.text_input("Product", value=quote["product"] or "")
+            quote_id = c2.text_input("Quote ID", value=quote["quote_id"] or "")
+            st.caption(f"Changes product and quote ID on all {len(quote['sheets'])} sheet(s) here. "
+                       "Renaming to another folder's name merges the two.")
+            if st.form_submit_button("Rename", type="primary"):
+                fs.rename_quote_folder(conn, customer["key"], quote["key"], product, quote_id)
+                st.session_state[FOLDER_STATE] = (customer["key"], (fs.folder_key(product), fs.folder_key(quote_id)))
+                st.rerun()
+
+
+# --- sheet level -------------------------------------------------------------
 
 def _sheet_header_inputs(current, key: str) -> dict:
     """Draw the five header fields, prefilled from `current` when editing, and return their values."""
@@ -142,10 +292,11 @@ def _sheet_header_inputs(current, key: str) -> dict:
     return {k: (v.strip() or None) if isinstance(v, str) else v for k, v in values.items()}
 
 
-def _render_new_sheet_form(conn: sqlite3.Connection) -> None:
-    """Draw the header form for a new sheet and open the sheet once it's created."""
-    with st.form("new_flavor_sheet"):
-        header = _sheet_header_inputs(None, "new_sheet")
+def _render_new_sheet_form(conn: sqlite3.Connection, prefill: dict, key: str, expanded: bool = False) -> None:
+    """Draw the header form for a new sheet, pre-filled from the folder it's started in, and open the sheet once created."""
+    label = "➕ New flavor sheet here" if prefill else "➕ New flavor sheet"
+    with st.expander(label, expanded=expanded), st.form(f"{key}_form"):
+        header = _sheet_header_inputs({k: prefill.get(k) for k in fs.HEADER_FIELDS}, key)
         create = st.form_submit_button("Create flavor sheet", type="primary")
     if create:
         _open(fs.create_sheet(conn, **header))

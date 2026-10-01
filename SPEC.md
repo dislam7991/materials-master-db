@@ -267,7 +267,7 @@ done. The three real templates were received 2026-09-21 and are mapped in
       DoD: `pytest` passes. `tests/test_app_smoke.py` asserts the seven
       labels in this exact order. `grep` finds no old tab name used as a tab
       name outside SPEC history and `docs/runs/`.
-- [ ] **F6a. Flavor sheets in folders, with search** (user's call,
+- [x] **F6a. Flavor sheets in folders, with search** (user's call,
       2026-10-01). The Flavor Sheet tab's sheet dropdown becomes a folder
       browser, like Google Drive: **Customer** folders, inside each a
       **Product · Quote ID** folder, and inside that the flavor sheets, newest
@@ -276,7 +276,8 @@ done. The three real templates were received 2026-09-21 and are mapped in
       - Folders are derived from the header fields already saved on each
         sheet. No folder tables. A folder exists while a sheet is in it.
         Grouping ignores case and extra spaces ("Acme" = "ACME "). The
-        folder shows the newest sheet's spelling. A blank field files under
+        folder shows its most-used spelling, the newest on a tie, so one typo
+        doesn't rename it. A blank field files under
         "(no customer)" / "(no product)" / "(no quote ID)", so nothing hides.
       - Clicking a sheet opens it in the existing editor (`?sheet=`).
         Breadcrumbs lead back up, and an open sheet shows its own folder
