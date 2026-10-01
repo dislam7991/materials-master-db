@@ -248,6 +248,25 @@ done. The three real templates were received 2026-09-21 and are mapped in
       the copy that was sent.
       DoD: `pytest` shows a reprice between two downloads yields two
       snapshots that differ, and the first is still retrievable.
+- [ ] **F5. Rename and reorder the app tabs** (user's call, 2026-10-01). The
+      names should say what each tab searches. In this order:
+      1. **All Materials Lookup** (was "Warehouse + Lab")
+      2. **Warehouse Lookup** (was "Material lookup")
+      3. **R&D Lab Lookup** (was "Lab Samples")
+      4. **Location Lookup** (was "What's in a location")
+      5. **Inventory Table** (was "All materials")
+      6. **Flavor Sheet** (unchanged)
+      7. **Sample Record Sheet** (unchanged)
+      Labels and order only. No tab's behavior changes. Change the `st.tabs`
+      list and its `with tabs[i]` blocks in `app.py`. Also update every place
+      that names a tab by its old name: help text pointing at another tab
+      (`ui/combined_tab.py` names "Lab Samples" and "Material lookup"), the
+      `ui/*_tab.py` module docstrings, and README. Code identifiers and module
+      file names stay as they are. Renaming files buys nothing and makes the
+      diff harder to review.
+      DoD: `pytest` passes. `tests/test_app_smoke.py` asserts the seven
+      labels in this exact order. `grep` finds no old tab name used as a tab
+      name outside SPEC history and `docs/runs/`.
 
 #### Parked in Phase F (user's call, 2026-09-24 — the automation skips these)
 
