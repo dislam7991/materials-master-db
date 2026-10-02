@@ -11,7 +11,10 @@ spreadsheet that carries the same part number on two different materials, five
 spellings of one supplier, and prices that aren't numbers.
 
 This reads both sheets into a queryable SQLite database with a search app on
-top, and reports every dirty row instead of papering over it.
+top, and reports every dirty row instead of papering over it. On top of that
+data, it cuts the transcription out of documenting a finished sample: the
+company Flavor Sheet filled from the database, and the flavor lines of the
+Sample Record Sheet handed over ready to paste.
 
 ![The material lookup tab: a material's price, supplier, category and allergen, the locations holding it, its lot history, and its price per kilo over time](docs/app_screenshot.png)
 
@@ -29,7 +32,9 @@ A small internal data platform. Two sources feed it:
 * **the R&D lab's flavor sample catalog**, a second sheet on a different
   account → the `lab_samples` table and its own search tab.
 
-Plus a data-quality report naming every dirty row in the inventory source.
+Plus a data-quality report identifying every dirty row in the inventory
+source, and **sample documentation** built from both catalogs — the one part of
+the database authored in the app rather than loaded from a sheet.
 
 **No real data lives in this repository.** `scripts/generate_synthetic_sheet.py`
 writes a fake sheet with the same columns and the same dirtiness as the real
@@ -52,6 +57,12 @@ streamlit run app.py                           # launch the lookup app
 Python 3.11+. The pipeline is stdlib-only; `requirements.txt` is needed only
 for the app. `python -m pytest` runs the tests (`requirements-dev.txt`).
 
+Everything runs on the synthetic data except the Flavor Sheet's **Download**
+button, which fills the company's own template. That file carries branding, so
+it isn't committed: copy it to `data/real/templates/Flavor Sheet Blank
+Template.xlsx` (gitignored) to enable downloads. The tests build a synthetic
+template of the same shape instead.
+
 Connecting the real sheets needs credentials that aren't in this repo —
 [see below](#connecting-the-real-sheets).
 
@@ -61,13 +72,25 @@ Full plan, definitions of done and scope reasoning in [SPEC.md](SPEC.md).
 
 **Built:** schema and idempotent DB init; seeded dirty-data generator; the ETL
 (extract → stage → validate → load, atomic and idempotent); the quality report
-with `--out` to Markdown; the Streamlit app; pytest for `cleaning.py`,
-`queries.py` and the three ETL load invariants, with CI on every push; the live
-Sheets source, confirmed against the real company sheet; the lab sample catalog
-(sheet mapped, table, loader, search tab); the combined Warehouse + Lab tab,
-one search across both catalogs; a Windows one-click launcher.
+with `--out` to Markdown; the Streamlit app; the live Sheets source, confirmed
+against the real company sheet; the lab sample catalog (sheet mapped, table,
+loader upserting on a stable RD-ID, search tab); the combined Warehouse + Lab
+tab, one search across both catalogs; a Windows one-click launcher; pytest
+across the pipeline, loaders, queries and Phase F renderers, plus an app smoke
+test, with CI on every push.
 
-**Remaining:** nothing in section 5 — every task there is done.
+**Phase F — sample documentation (active).** Built: the three company
+templates mapped ([layout doc](docs/phase_f_templates_layout.md)); the Flavor
+Sheet tab — build, save, reopen and download the filled template; the Sample
+Record Sheet copy block. Remaining: **labels** (F4, filling the `.docx` label
+template) and a **snapshot at download** (F2h), so a reprint after a reprice
+can be told apart from the copy already sent. Building the whole record sheet
+in the app (F2c2, F2d–F2g) is parked — the copy block saves most of the
+typing first.
+
+**Gated — Phase G (online and multi-user).** Written down so the shape is
+agreed in advance, not queued: every step spends money, moves company data off
+the machine, or changes who sees prices.
 
 **Parked — Phase C (sample-request ingestion).** Parsing the loose Excel
 sample-request files into `samples` / `sample_materials`. Goal 5 of the
@@ -96,8 +119,9 @@ writes back.
 
 The lab catalog is a second sheet ([layout
 doc](docs/flavor_sample_sheet_layout.md)); add a `[lab_sheet]` section to the
-same config, then `python -m dtf_materials.lab_samples`. Loads into
-`lab_samples`, flags duplicate sample codes, same Viewer-only rule.
+same config, then `python -m dtf_materials.lab_samples`. Upserts into
+`lab_samples` on RD-ID, skips and lists rows whose RD-ID is missing, malformed
+or shared, flags duplicate sample codes; same Viewer-only rule.
 
 ### Windows: one-click launch
 
@@ -121,7 +145,8 @@ Microsoft Store's placeholder `python.exe`.
 
 **As the operator**, each launch re-runs both loaders first. A re-run, not a
 rebuild: the database is never deleted, because the ETL is idempotent and
-deleting it would discard the stable `material_id`s. If a refresh fails (no
+deleting it would discard the stable `material_id`s — and every flavor sheet
+built in the app, which no loader can recreate. Back `db/materials.db` up. If a refresh fails (no
 network, sheet not shared), the app still launches on existing data. Skip with
 `run_app.bat --no-refresh`.
 
@@ -142,9 +167,11 @@ They don't need Google access — the app only reads `db/materials.db`, and
 3. They double-click `run_app.bat`. Seeing no config, it installs app deps
    only, leaves the database alone, and launches.
 
-Two caveats: the database is a **snapshot** and goes stale until you send a new
-one, and it holds real names, prices and suppliers — fine for a colleague who
-already has sheet access, but it's a data handoff, not just a program.
+Three caveats: the database is a **snapshot** and goes stale until you send a
+new one; it holds real names, prices and suppliers — fine for a colleague who
+already has sheet access, but it's a data handoff, not just a program; and it
+holds your flavor sheets too, so a fresh copy overwrites any the colleague
+built on theirs.
 
 A shared database on a synced drive would replace step 2 with one central
 refresh. The SPEC.md Backlog has why that waits until the ETL points at the
@@ -157,11 +184,12 @@ live sheet.
 queries can be tested from a REPL or reused by a future CLI without importing
 Streamlit.
 
-Six tabs: one search across both catalogs, saying whether something is in the
+Seven tabs: one search across both catalogs, saying whether something is in the
 warehouse, the lab, or both; a material by Part # or name; what's at a location
 (a full code like `6L-27-D`, or an aisle prefix like `6L`); everything in a
 sortable table; the lab's samples by vendor, flavor name, sample code or Part #;
-and the Flavor Sheet builder.
+and the two [sample documentation](#sample-documentation) tabs, Flavor Sheet
+and Sample Record Sheet.
 
 **The combined tab is the way in, not a replacement.** It summarizes whichever
 sides exist and names the tab holding the rest, because the two single-source
@@ -286,11 +314,66 @@ in code — cleaning up a source you control beats teaching the parser to
 tolerate it.
 
 **Two identifier questions, kept separate.** What identifies a row *within*
-`lab_samples` is a surrogate id, because Sample Code collides. How a lab sample
-*links to* a warehouse material is Part # first, falling back to Sample Code
-appearing inside the warehouse material name. Never fuzzy name matching — two
-vendors' "Vanilla" must not be silently merged. The link is designed; the
-combined view that would use it isn't built.
+`lab_samples` is the RD-ID (`RD-0000`..`RD-9999`), a column the lab maintains
+in its own sheet — not Sample Code, which collides, and not the Part #, which
+the company owns and most samples lack. How a lab sample *links to* a
+warehouse material is Part # first, falling back to Sample Code appearing
+inside the warehouse material name; the Warehouse + Lab tab applies it at read
+time. Never fuzzy name matching — two vendors' "Vanilla" must not be silently
+merged.
+
+**Upsert on RD-ID, not full reload.** The loader started as a full reload like
+the lots, until flavor sheets needed to reference lab samples: a surrogate id
+reassigned every run would repoint those lines at the wrong sample. Now a row
+keeps its id across runs, a sample dropped from the sheet stays in the
+database (a flavor line may still use it), and a row with a missing, malformed
+or shared RD-ID is skipped and listed rather than given an invented id.
+
+## Sample documentation
+
+See [flavor_sheets.py](dtf_materials/flavor_sheets.py),
+[flavor_sheet_xlsx.py](dtf_materials/flavor_sheet_xlsx.py),
+[record_copy_block.py](dtf_materials/record_copy_block.py) and the [template
+layout doc](docs/phase_f_templates_layout.md).
+
+Finishing a sample means filling company Excel templates by hand with values
+this database already holds. Both tabs were designed backwards from the
+document R&D actually fills, after a generic formula builder was tried and
+didn't match the daily work.
+
+**The Flavor Sheet** is a header (customer, product, quote ID, servings per
+flavor) plus any number of flavor profiles, each a BASE amount and material
+lines in mg per serving. Grams per sample are derived, never stored. Lines are
+picked from the warehouse or lab catalog, or typed and marked "not in catalog"
+— the one place a material can be typed, allowed because the printed sheet
+carries no price, so a typed name can't fabricate a cost. Sheets save and
+reopen; the open sheet lives in the page URL, so a reload doesn't lose it. The
+tab shows catalog prices and a rough cost estimate from priced lines only,
+labelled as such.
+
+**Download fills the template, never regenerates it.** The renderer copies the
+company file and writes inputs into known cells, keeping every style; the gram
+column gets the template's own formula so Excel does the arithmetic. A flavor
+longer than its slot grows the block, and every four flavors past the first
+go on a copy of the template page.
+
+**The Sample Record Sheet is a copy block, not a file.** The manager builds
+that sheet in Excel from the OneDrive template and pastes the actives from the
+PL Cost Sheet; the flavor lines are the part worth saving typing on. The tab
+turns a flavor profile into tab-separated rows for columns A:I, and the user
+pastes them below the last excipient. The app never opens the manager's file:
+openpyxl alters a workbook it saves and can't grow the section safely, while
+Excel does both when the user inserts rows. Part # and price resolve from the
+catalog at build time; a missing price stays an empty field and is flagged —
+a written 0 would hide it. Part numbers with leading zeros are written so
+Excel keeps them as text, and a tab or newline inside a name can't shift the
+columns.
+
+**This is the first data no loader can rebuild.** Lines reference catalog rows
+(`material_id`, `rd_id`) rather than copying names or prices, so a correction
+reaches every sheet; both loaders are tested never to touch these tables. The
+consequence is that `db/materials.db` stops being a disposable cache — back it
+up.
 
 ## Schema design
 
@@ -348,10 +431,16 @@ source row already *is* one physical sample on a shelf. It keeps `source_row`
 so a future lab quality report can cite exact sheet rows. `dtf_part_num` is
 nullable and deliberately not a foreign key: most lab samples have no Part #
 yet, and even once one is filled in, linking a sample to a warehouse material
-is a display-time join, not a constraint this table should enforce.
-`lab_sample_id` is a surrogate because Sample Code isn't unique — it collided
-22 ways in the first export, and the loader flags those rather than picking a
-winner.
+is a display-time join, not a constraint this table should enforce. Identity
+is `rd_id` (`UNIQUE`), because Sample Code isn't unique — it collided 22 ways
+in the first export, and the loader flags those rather than picking a winner.
+
+**Flavor sheets: three tables, one source per line.** `flavor_sheets` →
+`flavor_profiles` → `flavor_profile_lines`, cascading on delete. A `CHECK`
+requires each line to name exactly one of `material_id`, `rd_id` or
+`typed_name` — two sources, or none, is a malformed line. `formulas` /
+`formula_lines` are the earlier formula object the Flavor Sheet replaced;
+they stay until the record sheet settles whether it needs them.
 
 ## License
 
