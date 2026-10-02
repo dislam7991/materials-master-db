@@ -1,4 +1,4 @@
-"""Warehouse + Lab tab: one search over both catalogs."""
+"""All Materials Lookup tab: one search over both catalogs."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def render(conn: sqlite3.Connection, summary: dict) -> None:
         # Normal, not an error: the lab catalog is loaded by its own command.
         st.caption(
             "No lab samples are loaded in this database, so every result here "
-            "can only come from the warehouse. See the **Lab Samples** tab."
+            "can only come from the warehouse. See the **R&D Lab Lookup** tab."
         )
 
     term = st.text_input(
@@ -49,8 +49,8 @@ def render(conn: sqlite3.Connection, summary: dict) -> None:
         "sample code appearing in the warehouse material's name — "
         "“Matched by” says which. Unlinked is normal: most lab samples "
         "have never been adopted into inventory. This is a summary; the "
-        "**Material lookup** tab has lot history, price over time and "
-        "full stock reconciliation, and the **Lab Samples** tab has the "
+        "**Warehouse Lookup** tab has lot history, price over time and "
+        "full stock reconciliation, and the **R&D Lab Lookup** tab has the "
         "vendor and sensory detail."
     )
 

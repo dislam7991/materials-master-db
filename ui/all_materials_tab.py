@@ -1,4 +1,4 @@
-"""All materials tab: every material as one sortable table."""
+"""Inventory Table tab: every material as one sortable table."""
 
 from __future__ import annotations
 

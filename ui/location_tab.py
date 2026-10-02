@@ -1,4 +1,4 @@
-"""What's in a location tab: everything stored at or under a location code."""
+"""Location Lookup tab: everything stored at or under a location code."""
 
 from __future__ import annotations
 

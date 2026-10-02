@@ -207,9 +207,9 @@ typed by hand.
   normalization proven necessary for the main sheet), full-reloads the
   table each run, and flags duplicate sample codes rather than resolving
   them silently.
-- `search_lab_samples` / `get_lab_sample` in `queries.py`, and a **Lab
-  Samples** tab in the app — search by vendor, flavor name, sample code, or
-  Part #, mirroring the main "Material lookup" tab's live-search UX. Every
+- `search_lab_samples` / `get_lab_sample` in `queries.py`, and an **R&D Lab
+  Lookup** tab in the app — search by vendor, flavor name, sample code, or
+  Part #, mirroring the main "Warehouse Lookup" tab's live-search UX. Every
   field is shown in the detail view even when blank, since most of the
   sensory columns are a work in progress, not broken.
 

@@ -1,4 +1,4 @@
-"""Material lookup tab: where a material is, what it costs, its lot history."""
+"""Warehouse Lookup tab: where a material is, what it costs, its lot history."""
 
 from __future__ import annotations
 

@@ -53,7 +53,7 @@ def test_duplicate_expected_header_raises_instead_of_silently_overwriting():
     nothing downstream could tell. It now fails loudly, naming the column.
 
     Written after a "Vendor: A-5-1" (a lab location) turned up on the
-    Warehouse + Lab tab, as the one loader-side explanation for it that
+    All Materials Lookup tab, as the one loader-side explanation for it that
     leaves every other field intact."""
     header = VALID_HEADER + ["Vendor "]  # trailing space: normalizes to "Vendor"
 

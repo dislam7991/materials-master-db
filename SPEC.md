@@ -248,7 +248,7 @@ done. The three real templates were received 2026-09-21 and are mapped in
       the copy that was sent.
       DoD: `pytest` shows a reprice between two downloads yields two
       snapshots that differ, and the first is still retrievable.
-- [ ] **F5. Rename and reorder the app tabs** (user's call, 2026-10-01). The
+- [x] **F5. Rename and reorder the app tabs** (user's call, 2026-10-01). The
       names should say what each tab searches. In this order:
       1. **All Materials Lookup** (was "Warehouse + Lab")
       2. **Warehouse Lookup** (was "Material lookup")
