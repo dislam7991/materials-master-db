@@ -46,7 +46,10 @@ def app(db_path) -> AppTest:
 
 def test_every_tab_renders_without_error(app):
     assert not app.exception
-    assert len(app.tabs) == 7
+    assert [t.label for t in app.tabs] == [
+        "All Materials Lookup", "Warehouse Lookup", "R&D Lab Lookup",
+        "Location Lookup", "Inventory Table", "Flavor Sheet", "Sample Record Sheet",
+    ]
 
 
 def test_location_search_shows_a_table(app):
@@ -72,6 +75,49 @@ def test_flavor_sheet_create_then_add_a_flavor(app):
     assert not app.exception
     assert app.query_params.get("flavor") not in (None, "new")
     assert any(b.label == "Save flavor" for b in app.button)
+
+
+def _click(at: AppTest, label: str) -> AppTest:
+    """Click the first button whose label contains `label`, run, and fail on any app exception."""
+    next(b for b in at.button if label in b.label).click().run()
+    assert not at.exception
+    return at
+
+
+def test_flavor_sheet_folders_browse_to_a_sheet_and_back_up(db_path):
+    conn = db.init_db(db_path)
+    fs.create_sheet(conn, customer="Acme", product="Pre-Workout", quote_id="Q-1", servings=30)
+    newest = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", quote_id="Q-1", servings=30)
+    fs.add_profile(conn, newest, flavor_name="Mango")
+    fs.create_sheet(conn, customer="Other", product="Bar", quote_id="Q-9")
+    conn.close()
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _click(at, "📁 Acme · 2 sheets")
+    _click(at, "📁 Pre-Workout · Q-1 · 2 sheets")
+    # A new round started here copies the folder's newest header.
+    assert next(t for t in at.text_input if t.label == "Quote ID").value == "Q-1"
+
+    _click(at, "Mango")
+    assert at.query_params.get("sheet") == [str(newest)]
+    _click(at, "› 📁 Acme")
+    assert not at.query_params.get("sheet")
+    assert any("Pre-Workout · Q-1" in b.label for b in at.button)
+
+
+def test_flavor_sheet_search_opens_a_match(db_path):
+    conn = db.init_db(db_path)
+    sheet = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", quote_id="Q-1")
+    fs.add_profile(conn, sheet, flavor_name="Blue Raspberry")
+    conn.close()
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    at.text_input(key="flavor_sheet_search").input("raspberry").run()
+    _click(at, "📄 Acme › Pre-Workout · Q-1")
+    assert at.query_params.get("sheet") == [str(sheet)]
+    assert at.text_input(key="flavor_sheet_search").value == ""
 
 
 def test_open_flavor_shows_its_lines_and_cost(db_path):

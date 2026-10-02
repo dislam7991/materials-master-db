@@ -291,6 +291,100 @@ def test_helpers():
     assert fs.grams_per_sample(100, None) is None
 
 
+# --- folders and search (F6a) ------------------------------------------------
+
+def _quote_folder(tree, customer_key, quote_key):
+    """Return one Product · Quote ID folder from fs.folders()."""
+    customer = next(c for c in tree if c["key"] == customer_key)
+    return next(f for f in customer["quotes"] if f["key"] == quote_key)
+
+
+def test_folders_group_case_and_space_variants_under_the_most_used_spelling(conn):
+    fs.create_sheet(conn, customer="Acme", product="Protein  Blend", quote_id="Q-1")
+    fs.create_sheet(conn, customer="Acme ", product="Protein Blend", quote_id="Q-1")
+    fs.create_sheet(conn, customer=" ACME", product="protein blend", quote_id="q-1")   # newest, but a one-off
+
+    tree = fs.folders(conn)
+    assert [c["key"] for c in tree] == ["acme"]
+    assert tree[0]["customer"] == "Acme"
+    [quote] = tree[0]["quotes"]
+    assert quote["key"] == ("protein blend", "q-1")
+    assert (quote["product"], quote["quote_id"]) == ("Protein Blend", "Q-1")
+    assert len(quote["sheets"]) == 3
+
+
+def test_a_tied_spelling_goes_to_the_newest(conn):
+    fs.create_sheet(conn, customer="acme")
+    fs.create_sheet(conn, customer="Acme")
+    assert fs.folders(conn)[0]["customer"] == "Acme"
+
+
+def test_several_rounds_share_a_quote_folder_newest_first(conn):
+    first = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", quote_id="Q-1")
+    second = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", quote_id="Q-1")
+    fs.add_profile(conn, second, flavor_name="Mango")
+    fs.add_profile(conn, second, flavor_name="Lime")
+    other_version = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", quote_id="Q-2")
+
+    tree = fs.folders(conn)
+    rounds = _quote_folder(tree, "acme", ("pre-workout", "q-1"))["sheets"]
+    assert [e["sheet"]["flavor_sheet_id"] for e in rounds] == [second, first]
+    assert [p["flavor_name"] for p in rounds[0]["profiles"]] == ["Mango", "Lime"]
+    assert rounds[1]["profiles"] == []
+    assert _quote_folder(tree, "acme", ("pre-workout", "q-2"))["sheets"][0]["sheet"]["flavor_sheet_id"] == other_version
+
+
+def test_blank_fields_file_into_their_own_folder_sorted_last(conn):
+    fs.create_sheet(conn, customer=None, product="Gummy", quote_id=None)
+    fs.create_sheet(conn, customer="Zest Co", product=None, quote_id="Q-9")
+    fs.create_sheet(conn, customer="Zest Co", product="Bar", quote_id="Q-3")
+
+    tree = fs.folders(conn)
+    assert [c["key"] for c in tree] == ["zest co", ""]
+    assert tree[1]["customer"] is None
+    assert tree[1]["quotes"][0]["key"] == ("gummy", "")
+    assert [f["key"] for f in tree[0]["quotes"]] == [("bar", "q-3"), ("", "q-9")]
+    assert fs.BLANK_LABELS["quote_id"] == "(no quote ID)"
+
+
+def test_search_matches_every_header_field_and_flavor(conn):
+    sheet = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", quote_id="Q-1234")
+    fs.add_profile(conn, sheet, flavor_name="Blue Raspberry", sample_id="SMPL261001-01")
+    fs.create_sheet(conn, customer="Other", product="Bar", quote_id="Q-9")
+
+    def found(term):
+        """Return the ids of the sheets a search finds."""
+        return [e["sheet"]["flavor_sheet_id"] for e in fs.search_sheets(conn, term)]
+
+    for term in ("acme", "PRE-work", "q-1234", "raspberry", "261001"):
+        assert found(term) == [sheet], term
+    assert found("nothing like this") == []
+    assert found("   ") == []
+
+
+def test_rename_customer_touches_only_its_folder_and_can_merge(conn):
+    typo = fs.create_sheet(conn, customer="Acme Inc", product="Bar", quote_id="Q-1")
+    right = fs.create_sheet(conn, customer="Acme", product="Bar", quote_id="Q-1")
+    other = fs.create_sheet(conn, customer="Other", product="Bar", quote_id="Q-1")
+
+    assert fs.rename_customer(conn, "acme inc", "Acme") == 1
+    assert [fs.get_sheet(conn, i)["customer"] for i in (typo, right, other)] == ["Acme", "Acme", "Other"]
+    [acme] = [c for c in fs.folders(conn) if c["key"] == "acme"]
+    assert len(acme["quotes"][0]["sheets"]) == 2
+
+
+def test_rename_quote_folder_touches_only_that_customers_folder(conn):
+    mine = fs.create_sheet(conn, customer="Acme", product="Bar", quote_id="Q-1", servings=30)
+    other_quote = fs.create_sheet(conn, customer="Acme", product="Bar", quote_id="Q-2")
+    other_customer = fs.create_sheet(conn, customer="Other", product="Bar", quote_id="Q-1")
+
+    assert fs.rename_quote_folder(conn, "acme", ("bar", "q-1"), "Protein Bar", " Q-1 ") == 1
+    renamed = fs.get_sheet(conn, mine)
+    assert (renamed["product"], renamed["quote_id"], renamed["servings"]) == ("Protein Bar", "Q-1", 30)
+    assert fs.get_sheet(conn, other_quote)["product"] == "Bar"
+    assert fs.get_sheet(conn, other_customer)["product"] == "Bar"
+
+
 # --- the renderer ------------------------------------------------------------
 
 BAND = PatternFill("solid", fgColor="D0CECE")

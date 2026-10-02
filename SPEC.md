@@ -248,6 +248,66 @@ done. The three real templates were received 2026-09-21 and are mapped in
       the copy that was sent.
       DoD: `pytest` shows a reprice between two downloads yields two
       snapshots that differ, and the first is still retrievable.
+- [x] **F5. Rename and reorder the app tabs** (user's call, 2026-10-01). The
+      names should say what each tab searches. In this order:
+      1. **All Materials Lookup** (was "Warehouse + Lab")
+      2. **Warehouse Lookup** (was "Material lookup")
+      3. **R&D Lab Lookup** (was "Lab Samples")
+      4. **Location Lookup** (was "What's in a location")
+      5. **Inventory Table** (was "All materials")
+      6. **Flavor Sheet** (unchanged)
+      7. **Sample Record Sheet** (unchanged)
+      Labels and order only. No tab's behavior changes. Change the `st.tabs`
+      list and its `with tabs[i]` blocks in `app.py`. Also update every place
+      that names a tab by its old name: help text pointing at another tab
+      (`ui/combined_tab.py` names "Lab Samples" and "Material lookup"), the
+      `ui/*_tab.py` module docstrings, and README. Code identifiers and module
+      file names stay as they are. Renaming files buys nothing and makes the
+      diff harder to review.
+      DoD: `pytest` passes. `tests/test_app_smoke.py` asserts the seven
+      labels in this exact order. `grep` finds no old tab name used as a tab
+      name outside SPEC history and `docs/runs/`.
+- [x] **F6a. Flavor sheets in folders, with search** (user's call,
+      2026-10-01). The Flavor Sheet tab's sheet dropdown becomes a folder
+      browser, like Google Drive: **Customer** folders, inside each a
+      **Product · Quote ID** folder, and inside that the flavor sheets, newest
+      first. One quote ID holds several sheets, one per round of samples.
+      A new product version is a new quote ID, so it gets its own folder.
+      - Folders are derived from the header fields already saved on each
+        sheet. No folder tables. A folder exists while a sheet is in it.
+        Grouping ignores case and extra spaces ("Acme" = "ACME "). The
+        folder shows its most-used spelling, the newest on a tie, so one typo
+        doesn't rename it. A blank field files under
+        "(no customer)" / "(no product)" / "(no quote ID)", so nothing hides.
+      - Clicking a sheet opens it in the existing editor (`?sheet=`).
+        Breadcrumbs lead back up, and an open sheet shows its own folder
+        path.
+      - "New flavor sheet here" in a folder pre-fills the header from that
+        folder. In a Product · Quote ID folder it copies the newest sheet's
+        header, because the next round usually keeps its servings and
+        prefix.
+      - **Rename folder** rewrites that header field on every sheet in the
+        folder. It is how a typo split ("Acme" vs "Acme Inc") is fixed: a
+        human merging on purpose, never an automatic one.
+      - A search box above the folders matches customer, product, quote ID,
+        flavor name and Sample ID (case-insensitive substring). Each result
+        shows its folder path and opens the sheet.
+      - It stays in the Flavor Sheet tab because Streamlit can't switch tabs
+        from code, so a separate tab couldn't open a sheet.
+      DoD: `pytest` covers the grouping (case/space variants share a folder,
+      blank fields get their bucket, several rounds in one quote folder), the
+      search fields, and that a rename touches only its own folder. The
+      smoke test browses Customer → Product · Quote ID → sheet, opens a
+      search result, and still creates a sheet from the top level.
+- [ ] **F6b. Re-download as sent.** For each F2h snapshot of an open sheet,
+      a download button that re-renders the flavor sheet or the labels from
+      the snapshot's stored numbers, through the existing renderers. That
+      gives the copy that was sent, not today's numbers. The only new code
+      is the snapshot → renderer adapter. A sheet downloaded before F2h has
+      no snapshot and says so; it never falls back to today's numbers.
+      DoD: `pytest` shows a rename or reprice after a download still
+      re-renders the original values, for both the flavor sheet and the
+      labels.
 
 #### Parked in Phase F (user's call, 2026-09-24 — the automation skips these)
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections import Counter, defaultdict
 from datetime import date
 
 HEADER_FIELDS = ("customer", "product", "quote_id", "servings", "sample_prefix")
@@ -397,3 +398,136 @@ def get_snapshot(conn: sqlite3.Connection, snapshot_id: int) -> dict | None:
         "SELECT data FROM flavor_sheet_snapshots WHERE snapshot_id = ?", (snapshot_id,)
     ).fetchone()
     return json.loads(row["data"]) if row else None
+
+
+# --- folders and search (F6a) ----------------------------------------------
+#
+# Customer → Product · Quote ID → sheets, derived from the header fields every
+# sheet already stores. No folder tables: a folder exists while a sheet is in
+# it, and renaming one rewrites that field on its sheets.
+
+FOLDER_FIELDS = ("customer", "product", "quote_id")
+BLANK_LABELS = {"customer": "(no customer)", "product": "(no product)", "quote_id": "(no quote ID)"}
+
+
+def folder_key(value: str | None) -> str:
+    """Return the folder a header value files under: trimmed, case-folded, inner spaces collapsed ("" when blank)."""
+    return " ".join((value or "").split()).casefold()
+
+
+def _clean(value: str | None) -> str | None:
+    """Return a header value trimmed with inner spaces collapsed, or None when blank."""
+    return " ".join((value or "").split()) or None
+
+
+def sheet_folder(sheet) -> tuple[str, tuple[str, str]]:
+    """Return the (customer key, (product key, quote key)) a sheet files under."""
+    return folder_key(sheet["customer"]), (folder_key(sheet["product"]), folder_key(sheet["quote_id"]))
+
+
+def _sort_key(key: str) -> tuple[bool, str]:
+    """Sort folders alphabetically with the blank "(no …)" folder last."""
+    return (key == "", key)
+
+
+def _sheets_with_profiles(conn: sqlite3.Connection) -> list[dict]:
+    """Return every sheet newest first as {"sheet": row, "profiles": [rows in print order]}."""
+    by_sheet: dict[int, list] = defaultdict(list)
+    for p in conn.execute("SELECT * FROM flavor_profiles ORDER BY flavor_sheet_id, position, flavor_profile_id"):
+        by_sheet[p["flavor_sheet_id"]].append(p)
+    return [{"sheet": s, "profiles": by_sheet[s["flavor_sheet_id"]]} for s in list_sheets(conn)]
+
+
+def folders(conn: sqlite3.Connection) -> list[dict]:
+    """Return the folder tree: customers A–Z, each with its Product · Quote ID folders A–Z, each with its sheets newest first.
+
+    A customer is {"key", "customer", "quotes"}; a quote folder is {"key":
+    (product key, quote key), "product", "quote_id", "sheets"}, where sheets
+    are _sheets_with_profiles entries. A folder is named by its most-used
+    spelling, the newest on a tie, so one typo doesn't rename it (None when
+    blank).
+    """
+    tree: dict[str, dict] = {}
+    for entry in _sheets_with_profiles(conn):
+        sheet = entry["sheet"]
+        ckey, qkey = sheet_folder(sheet)
+        customer = tree.setdefault(ckey, {"key": ckey, "spellings": Counter(), "quotes": {}})
+        customer["spellings"][_clean(sheet["customer"])] += 1
+        quote = customer["quotes"].setdefault(qkey, {"key": qkey, "spellings": Counter(), "sheets": []})
+        quote["spellings"][(_clean(sheet["product"]), _clean(sheet["quote_id"]))] += 1
+        quote["sheets"].append(entry)
+
+    def named(quote: dict) -> dict:
+        """Return a quote folder with its display product and quote ID."""
+        product, quote_id = _most_used(quote["spellings"])
+        return {"key": quote["key"], "product": product, "quote_id": quote_id, "sheets": quote["sheets"]}
+
+    return [
+        {
+            "key": c["key"],
+            "customer": _most_used(c["spellings"]),
+            "quotes": [named(c["quotes"][k]) for k in sorted(c["quotes"], key=lambda k: (_sort_key(k[0]), _sort_key(k[1])))],
+        }
+        for c in (tree[k] for k in sorted(tree, key=_sort_key))
+    ]
+
+
+def _most_used(spellings: Counter):
+    """Return the most-used spelling; sheets are counted newest first, and max keeps the first of a tie."""
+    return max(spellings, key=spellings.__getitem__)
+
+
+def search_sheets(conn: sqlite3.Connection, term: str) -> list[dict]:
+    """Return sheets (newest first, as _sheets_with_profiles entries) matching `term` anywhere a person would look.
+
+    Case-insensitive substring of customer, product, quote ID, or any of the
+    sheet's flavor names or Sample IDs. A blank term matches nothing.
+    """
+    needle = term.strip().casefold()
+    if not needle:
+        return []
+
+    def hit(value) -> bool:
+        """Return True if `value` contains the search term."""
+        return needle in (value or "").casefold()
+
+    return [
+        e for e in _sheets_with_profiles(conn)
+        if any(hit(e["sheet"][f]) for f in FOLDER_FIELDS)
+        or any(hit(p["flavor_name"]) or hit(p["sample_id"]) for p in e["profiles"])
+    ]
+
+
+def rename_customer(conn: sqlite3.Connection, customer_key: str, new_name: str | None) -> int:
+    """Set the customer on every sheet in one customer folder and return how many changed.
+
+    Renaming onto another folder's name merges the two: that is the fix for a
+    typo split, done by a person on purpose.
+    """
+    ids = [e["sheet"]["flavor_sheet_id"] for e in _sheets_with_profiles(conn)
+           if folder_key(e["sheet"]["customer"]) == customer_key]
+    return _set_on(conn, ids, customer=_clean(new_name))
+
+
+def rename_quote_folder(
+    conn: sqlite3.Connection,
+    customer_key: str,
+    quote_folder_key: tuple[str, str],
+    product: str | None,
+    quote_id: str | None,
+) -> int:
+    """Set product and quote ID on every sheet in one Product · Quote ID folder and return how many changed."""
+    ids = [e["sheet"]["flavor_sheet_id"] for e in _sheets_with_profiles(conn)
+           if sheet_folder(e["sheet"]) == (customer_key, quote_folder_key)]
+    return _set_on(conn, ids, product=_clean(product), quote_id=_clean(quote_id))
+
+
+def _set_on(conn: sqlite3.Connection, sheet_ids: list[int], **fields) -> int:
+    """Write the given header fields to each sheet in one transaction and return the count."""
+    with conn:
+        for sheet_id in sheet_ids:
+            conn.execute(
+                f"UPDATE flavor_sheets SET {', '.join(f'{k} = ?' for k in fields)} WHERE flavor_sheet_id = ?",
+                [*fields.values(), sheet_id],
+            )
+    return len(sheet_ids)

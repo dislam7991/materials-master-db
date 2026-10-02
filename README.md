@@ -16,7 +16,7 @@ data, it cuts the transcription out of documenting a finished sample: the
 company Flavor Sheet filled from the database, and the flavor lines of the
 Sample Record Sheet handed over ready to paste.
 
-![The material lookup tab: a material's price, supplier, category and allergen, the locations holding it, its lot history, and its price per kilo over time](docs/app_screenshot.png)
+![The Warehouse Lookup tab: a material's price, supplier, category and allergen, the locations holding it, its lot history, and its price per kilo over time](docs/app_screenshot.png)
 
 *Running on the synthetic sheet in this repo — no real names, prices or
 suppliers. The warning under the location table is the principle in miniature:
@@ -74,10 +74,10 @@ Full plan, definitions of done and scope reasoning in [SPEC.md](SPEC.md).
 (extract → stage → validate → load, atomic and idempotent); the quality report
 with `--out` to Markdown; the Streamlit app; the live Sheets source, confirmed
 against the real company sheet; the lab sample catalog (sheet mapped, table,
-loader upserting on a stable RD-ID, search tab); the combined Warehouse + Lab
-tab, one search across both catalogs; a Windows one-click launcher; pytest
-across the pipeline, loaders, queries and Phase F renderers, plus an app smoke
-test, with CI on every push.
+loader upserting on a stable RD-ID, search tab); the combined All Materials
+Lookup tab, one search across both catalogs; a Windows one-click launcher;
+pytest across the pipeline, loaders, queries and Phase F renderers, plus an app
+smoke test, with CI on every push.
 
 **Phase F — sample documentation (active).** Built: the three company
 templates mapped ([layout doc](docs/phase_f_templates_layout.md)); the Flavor
@@ -184,12 +184,14 @@ live sheet.
 queries can be tested from a REPL or reused by a future CLI without importing
 Streamlit.
 
-Seven tabs: one search across both catalogs, saying whether something is in the
-warehouse, the lab, or both; a material by Part # or name; what's at a location
-(a full code like `6L-27-D`, or an aisle prefix like `6L`); everything in a
-sortable table; the lab's samples by vendor, flavor name, sample code or Part #;
-and the two [sample documentation](#sample-documentation) tabs, Flavor Sheet
-and Sample Record Sheet.
+Seven tabs: **All Materials Lookup**, one search across both catalogs, saying
+whether something is in the warehouse, the lab, or both; **Warehouse Lookup**, a
+material by Part # or name; **R&D Lab Lookup**, the lab's samples by vendor,
+flavor name, sample code or Part #; **Location Lookup**, what's at a location (a
+full code like `6L-27-D`, or an aisle prefix like `6L`); **Inventory Table**,
+everything in a sortable table; then the [sample
+documentation](#sample-documentation) tabs, **Flavor Sheet** and **Sample
+Record Sheet**.
 
 **The combined tab is the way in, not a replacement.** It summarizes whichever
 sides exist and names the tab holding the rest, because the two single-source

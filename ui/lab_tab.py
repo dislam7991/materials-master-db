@@ -1,4 +1,4 @@
-"""Lab Samples tab: the R&D lab's flavor sample catalog."""
+"""R&D Lab Lookup tab: the R&D lab's flavor sample catalog."""
 
 from __future__ import annotations
 
