@@ -41,19 +41,19 @@ stat_suppliers.metric("Supplier Spellings", f"{summary['suppliers']:,}")
 stat_locations.metric("Locations", f"{summary['locations']:,}")
 
 tabs = st.tabs([
-    "Warehouse + Lab", "Material lookup", "What's in a location",
-    "All materials", "Lab Samples", "Flavor Sheet", "Sample Record Sheet",
+    "All Materials Lookup", "Warehouse Lookup", "R&D Lab Lookup",
+    "Location Lookup", "Inventory Table", "Flavor Sheet", "Sample Record Sheet",
 ])
 with tabs[0]:
     combined_tab.render(conn, summary)
 with tabs[1]:
     material_tab.render(conn)
 with tabs[2]:
-    location_tab.render(conn)
-with tabs[3]:
-    all_materials_tab.render(conn)
-with tabs[4]:
     lab_tab.render(conn, summary)
+with tabs[3]:
+    location_tab.render(conn)
+with tabs[4]:
+    all_materials_tab.render(conn)
 with tabs[5]:
     flavor_sheet_tab.render(conn)
 with tabs[6]:

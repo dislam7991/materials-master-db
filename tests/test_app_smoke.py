@@ -46,7 +46,10 @@ def app(db_path) -> AppTest:
 
 def test_every_tab_renders_without_error(app):
     assert not app.exception
-    assert len(app.tabs) == 7
+    assert [t.label for t in app.tabs] == [
+        "All Materials Lookup", "Warehouse Lookup", "R&D Lab Lookup",
+        "Location Lookup", "Inventory Table", "Flavor Sheet", "Sample Record Sheet",
+    ]
 
 
 def test_location_search_shows_a_table(app):
