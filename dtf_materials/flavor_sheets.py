@@ -83,6 +83,11 @@ def product_line(sheet) -> str:
     return " - ".join(p.strip() for p in parts if p and p.strip())
 
 
+def profile_title(profile) -> str:
+    """Return a flavor's display title: its name and Sample ID, or a placeholder."""
+    return " ".join(x for x in (profile["flavor_name"], profile["sample_id"]) if x) or "(unnamed flavor)"
+
+
 def suggest_sample_id(prefix: str | None, day: date, position: int) -> str:
     """Return a suggested Sample ID, <prefix><YYMMDD>-<NN> (e.g. SMPL260916-01); the user may overwrite it."""
     return f"{(prefix or '').strip()}{day:%y%m%d}-{position:02d}"

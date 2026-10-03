@@ -299,7 +299,7 @@ done. The three real templates were received 2026-09-21 and are mapped in
       search fields, and that a rename touches only its own folder. The
       smoke test browses Customer → Product · Quote ID → sheet, opens a
       search result, and still creates a sheet from the top level.
-- [ ] **F6b. Re-download as sent.** For each F2h snapshot of an open sheet,
+- [x] **F6b. Re-download as sent.** For each F2h snapshot of an open sheet,
       a download button that re-renders the flavor sheet or the labels from
       the snapshot's stored numbers, through the existing renderers. That
       gives the copy that was sent, not today's numbers. The only new code

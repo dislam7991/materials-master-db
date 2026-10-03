@@ -94,6 +94,23 @@ def labels_for_sheet(conn: sqlite3.Connection, flavor_sheet_id: int) -> list[Lab
     ]
 
 
+def labels_from_snapshot(snapshot: dict) -> list[Label]:
+    """Return the labels as they were sent: one per profile in a stored F2h snapshot, with its scoop count."""
+    header = snapshot["header"]
+    return [
+        Label(
+            customer=header["customer"],
+            product=header["product"],
+            flavor=p["flavor_name"],
+            sample_id=p["sample_id"],
+            serving_size=serving_size(snapshot["scoops_per_serving"], serving_grams(
+                p["base_mg"], [l["mg_per_serving"] for l in p["lines"]],
+            )),
+        )
+        for p in snapshot["profiles"]
+    ]
+
+
 def render(labels: list[Label], template_path: Path | str = DEFAULT_TEMPLATE_PATH) -> list[bytes]:
     """Return one filled .docx per ten labels, in order; no labels, no documents."""
     with zipfile.ZipFile(template_path) as z:
