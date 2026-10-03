@@ -30,7 +30,7 @@ from openpyxl.styles import Border, PatternFill, Side
 from dtf_materials import etl
 from dtf_materials import flavor_sheets as fs
 from dtf_materials.db import PROJECT_ROOT, init_db
-from dtf_materials.flavor_sheet_xlsx import Flavor, render
+from dtf_materials.flavor_sheet_xlsx import Flavor, render, render_snapshot
 from dtf_materials.sources import CsvInventorySource
 
 SYNTHETIC_CSV = PROJECT_ROOT / "data" / "synthetic" / "raw_material_inventory.csv"
@@ -498,3 +498,29 @@ def test_more_than_four_flavors_go_on_a_second_page(template):
 
 def test_the_workbook_recalculates_on_open(template):
     assert _open(render("P", 4, [], template)).calculation.fullCalcOnLoad
+
+
+# --- re-download as sent (F6b) -------------------------------------------------
+
+def test_a_rename_or_reprice_after_a_download_still_re_renders_what_was_sent(conn, template):
+    sheet, material_id = _priced_sheet(conn, 42.5)
+    sent = fs.take_snapshot(conn, sheet, "flavor_sheet")
+
+    conn.execute(
+        "UPDATE materials SET material_name = 'Caffeine Anhydrous', current_price_per_kilo = 55.0 "
+        "WHERE material_id = ?", (material_id,)
+    )
+    profile = fs.get_profiles(conn, sheet)[0]["flavor_profile_id"]
+    fs.update_profile(conn, profile, "Mango", "X260927-01", 9000)
+    fs.update_sheet(conn, sheet, customer="Acme Inc", servings=6)
+    conn.commit()
+
+    ws = _open(render_snapshot(fs.get_snapshot(conn, sent), template))["Sheet1"]
+    assert ws["A3"].value == "Product Name: Acme - Pre-Workout"
+    assert ws["F3"].value == 4
+    assert ws["B6"].value == "Peach X260927-01"
+    assert [ws[f"{c}8"].value for c in "AB"] == ["BASE", 8400]
+    assert [ws[f"{c}9"].value for c in "AB"] == ["Caffeine", 200]
+    # Re-rendering is not a new download: nothing new is snapshotted.
+    assert len(fs.list_snapshots(conn, sheet)) == 1
+
