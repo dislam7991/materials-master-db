@@ -23,6 +23,7 @@ from dtf_materials import queries as q
 from dtf_materials.flavor_sheet_xlsx import DEFAULT_TEMPLATE_PATH as TEMPLATE_PATH
 from dtf_materials.flavor_sheet_xlsx import Flavor
 from dtf_materials.flavor_sheet_xlsx import render as render_flavor_sheet
+from dtf_materials.flavor_sheet_xlsx import render_snapshot as render_flavor_sheet_snapshot
 from ui.common import money
 
 FOLDER_STATE = "flavor_sheet_folder"   # (customer key, quote folder key) being browsed; None = not chosen
@@ -85,6 +86,7 @@ def render(conn: sqlite3.Connection) -> None:
         st.warning("Servings per flavor is blank, so the sheet can't work out any grams. Set it in the details above.")
     _render_download_and_delete(conn, sheet, profiles)
     _render_labels(conn, sheet, profiles)
+    _render_sent_copies(conn, sheet)
 
 
 # --- URL state ---------------------------------------------------------------
@@ -141,7 +143,7 @@ def _quote_label(quote: dict) -> str:
 
 def _sheet_label(entry: dict) -> str:
     """Return a sheet's line in a folder: its date and flavors."""
-    titles = [_profile_title(p) for p in entry["profiles"]]
+    titles = [fs.profile_title(p) for p in entry["profiles"]]
     flavors = ", ".join(titles[:4]) + (f", +{len(titles) - 4} more" if len(titles) > 4 else "")
     return f"{entry['sheet']['created_at'][:10]} · {len(titles)} flavor(s)" + (f": {flavors}" if titles else "")
 
@@ -313,11 +315,6 @@ def _render_sheet_details(conn: sqlite3.Connection, sheet) -> None:
             st.rerun()
 
 
-def _profile_title(profile) -> str:
-    """Return a flavor's display title: its name and Sample ID, or a placeholder."""
-    return " ".join(x for x in (profile["flavor_name"], profile["sample_id"]) if x) or "(unnamed flavor)"
-
-
 def _pick_flavor(sheet_id: int, profiles: list) -> int | str:
     """Draw the flavor picker and return the open flavor's id, or ADD_FLAVOR."""
     profile_ids = [p["flavor_profile_id"] for p in profiles]
@@ -330,7 +327,7 @@ def _pick_flavor(sheet_id: int, profiles: list) -> int | str:
         options,
         index=options.index(open_flavor),
         format_func=lambda o: o if o == ADD_FLAVOR else next(
-            f"{p['position']}. {_profile_title(p)}" for p in profiles if p["flavor_profile_id"] == o
+            f"{p['position']}. {fs.profile_title(p)}" for p in profiles if p["flavor_profile_id"] == o
         ),
         horizontal=True,
     )
@@ -363,7 +360,7 @@ def _render_add_flavor_form(conn: sqlite3.Connection, sheet, profiles: list) -> 
             [None] + profile_ids,
             index=len(profile_ids),
             format_func=lambda o: "Empty" if o is None else next(
-                f"Copy of {p['position']}. {_profile_title(p)}" for p in profiles
+                f"Copy of {p['position']}. {fs.profile_title(p)}" for p in profiles
                 if p["flavor_profile_id"] == o
             ),
             key=f"new_fcopy_{sheet_id}_{next_position}",
@@ -409,7 +406,7 @@ def _render_flavor_editor(conn: sqlite3.Connection, sheet, profile) -> None:
             st.caption(caption)
 
     with st.popover("Remove this flavor"):
-        st.write(f"Remove **{_profile_title(profile)}** and its {len(lines)} lines?")
+        st.write(f"Remove **{fs.profile_title(profile)}** and its {len(lines)} lines?")
         if st.button("Remove", key=f"remove_{pid}", type="primary"):
             fs.delete_profile(conn, pid)
             _open(sheet["flavor_sheet_id"])
@@ -583,7 +580,7 @@ def _build_workbook(conn: sqlite3.Connection, sheet_id: int) -> bytes:
         sheet["servings"],
         [
             Flavor(
-                title=_profile_title(p),
+                title=fs.profile_title(p),
                 base_mg=p["base_mg"],
                 lines=[(l["name"], l["mg_per_serving"])
                        for l in fs.get_lines(conn, p["flavor_profile_id"])],
@@ -666,3 +663,62 @@ def _render_labels(conn: sqlite3.Connection, sheet, profiles: list) -> None:
             on_click="ignore",
             key=f"labels_{sheet_id}_{index}",
         )
+
+
+# --- re-download as sent (F6b) -------------------------------------------------
+
+def _rebuild_workbook(conn: sqlite3.Connection, snapshot_id: int) -> bytes:
+    """Re-render the flavor sheet from a stored snapshot (called on Download); takes no new snapshot."""
+    return render_flavor_sheet_snapshot(fs.get_snapshot(conn, snapshot_id), TEMPLATE_PATH)
+
+
+def _rebuild_labels(conn: sqlite3.Connection, snapshot_id: int, index: int) -> bytes:
+    """Re-render labels document `index` from a stored snapshot (called on Download); takes no new snapshot."""
+    labels = labels_docx.labels_from_snapshot(fs.get_snapshot(conn, snapshot_id))
+    return labels_docx.render(labels, labels_docx.DEFAULT_TEMPLATE_PATH)[index]
+
+
+def _render_sent_copies(conn: sqlite3.Connection, sheet) -> None:
+    """List every past download of the sheet with a button that re-renders it from its snapshot.
+
+    The copy that was sent, not today's numbers: a rename or reprice since
+    then doesn't reach it. A download from before snapshots existed left
+    nothing to rebuild from, so it isn't listed, and nothing is guessed.
+    """
+    sheet_id = sheet["flavor_sheet_id"]
+    snapshots = fs.list_snapshots(conn, sheet_id)
+    with st.expander(f"Copies sent ({len(snapshots)})"):
+        if not snapshots:
+            st.caption(
+                "No downloads recorded for this sheet. A copy downloaded before "
+                "snapshots were kept has nothing stored to rebuild it from."
+            )
+            return
+        st.caption("Each download, rebuilt from the numbers it was printed with. Times are UTC.")
+        stem = _file_stem(sheet)
+        for snap in reversed(snapshots):
+            when, snapshot_id = snap["taken_at"][:16], snap["snapshot_id"]
+            if snap["kind"] == "flavor_sheet":
+                if TEMPLATE_PATH.exists():
+                    st.download_button(
+                        f"{when} · Flavor Sheet (.xlsx)",
+                        data=partial(_rebuild_workbook, conn, snapshot_id),
+                        file_name=f"Flavor Sheet - {stem} - sent {when[:10]}.xlsx",
+                        mime=XLSX_MIME, on_click="ignore", key=f"sent_{snapshot_id}",
+                    )
+                else:
+                    st.write(f"{when} · Flavor Sheet (no template on this machine to rebuild it)")
+                continue
+            count = len(fs.get_snapshot(conn, snapshot_id)["profiles"])
+            if not labels_docx.DEFAULT_TEMPLATE_PATH.exists():
+                st.write(f"{when} · Labels (no template on this machine to rebuild them)")
+                continue
+            per_doc = labels_docx.LABELS_PER_DOCUMENT
+            for index, start in enumerate(range(0, count, per_doc)):
+                suffix = f" {start + 1}-{min(start + per_doc, count)}" if count > per_doc else ""
+                st.download_button(
+                    f"{when} · Labels{suffix} (.docx)",
+                    data=partial(_rebuild_labels, conn, snapshot_id, index),
+                    file_name=f"Labels - {stem}{suffix} - sent {when[:10]}.docx",
+                    mime=DOCX_MIME, on_click="ignore", key=f"sent_{snapshot_id}_{index}",
+                )
