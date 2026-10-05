@@ -30,7 +30,7 @@ from dtf_materials import etl
 from dtf_materials import flavor_sheets as fs
 from dtf_materials.db import PROJECT_ROOT, init_db
 from dtf_materials.labels_docx import (
-    Label, labels_for_sheet, render, serving_grams, serving_size,
+    Label, labels_for_sheet, labels_from_snapshot, render, serving_grams, serving_size,
 )
 from dtf_materials.sources import CsvInventorySource
 
@@ -182,6 +182,31 @@ def test_labels_for_sheet_follow_the_profiles(conn):
         ["Acme", "Pre-Workout", "Peach", "X-01", "2 scoop serving (12.4 g)"],
         ["Acme", "Pre-Workout", "Mango", "X-02", ""],
     ]
+
+
+def test_a_rename_or_reprice_after_a_download_still_re_renders_the_labels_sent(conn, template):
+    material = conn.execute(
+        "INSERT INTO materials (dtf_part_num, material_name, current_price_per_kilo) "
+        "VALUES ('DTF-100', 'Caffeine', 42.5)"
+    ).lastrowid
+    sheet = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", servings=30)
+    peach = fs.add_profile(conn, sheet, "Peach", "X-01", base_mg=12000)
+    fs.add_line(conn, peach, material_id=material, mg_per_serving=350)
+    fs.set_scoops_per_serving(conn, "Pre-Workout", 2)
+    sent = fs.take_snapshot(conn, sheet, "labels")
+
+    conn.execute("UPDATE materials SET current_price_per_kilo = 55.0 WHERE material_id = ?", (material,))
+    fs.update_profile(conn, peach, "Mango", "X-02", 15000)
+    fs.update_sheet(conn, sheet, customer="Acme Inc")
+    fs.set_scoops_per_serving(conn, "Pre-Workout", 1)
+
+    [doc] = render(labels_from_snapshot(fs.get_snapshot(conn, sent)), template)
+    assert _texts(_label_cells(_document(doc))[0]) == [
+        "Acme", "Pre-Workout", "Peach", "X-01", "2 scoop serving (12.4 g)",
+    ]
+    # Today's numbers render differently, so the test can tell the two apart.
+    assert labels_for_sheet(conn, sheet)[0].lines()[2:] == ["Mango", "X-02", "1 scoop serving (15.4 g)"]
+    assert len(fs.list_snapshots(conn, sheet)) == 1
 
 
 def test_the_etl_leaves_product_scoops_untouched(tmp_path):

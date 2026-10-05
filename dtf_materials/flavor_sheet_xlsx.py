@@ -17,6 +17,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+from . import flavor_sheets as fs
 from .db import PROJECT_ROOT
 
 DEFAULT_TEMPLATE_PATH = PROJECT_ROOT / "data" / "real" / "templates" / "Flavor Sheet Blank Template.xlsx"
@@ -67,6 +68,28 @@ def render(
     out = BytesIO()
     wb.save(out)
     return out.getvalue()
+
+
+def render_snapshot(snapshot: dict, template_path: Path | str = DEFAULT_TEMPLATE_PATH) -> bytes:
+    """Return the workbook as it was sent: rendered from a stored F2h snapshot, never from today's numbers.
+
+    A rename or a changed amount since the download must not leak into the
+    re-download, or "the copy we sent" would be a fabrication.
+    """
+    header = snapshot["header"]
+    return render(
+        fs.product_line(header),
+        header["servings"],
+        [
+            Flavor(
+                title=fs.profile_title(p),
+                base_mg=p["base_mg"],
+                lines=[(l["name"], l["mg_per_serving"]) for l in p["lines"]],
+            )
+            for p in snapshot["profiles"]
+        ],
+        template_path,
+    )
 
 
 def _fill_page(ws: Worksheet, product_line: str, servings: float | None, page: list[Flavor]) -> None:
