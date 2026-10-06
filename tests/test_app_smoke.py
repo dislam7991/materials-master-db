@@ -64,16 +64,27 @@ def test_combined_search_shows_a_table(app):
     assert app.dataframe
 
 
+def _param(at: AppTest, name: str) -> str | None:
+    """Return a URL query param as a string.
+
+    AppTest returned each value as a one-item list before Streamlit 1.65 and
+    a plain string since. The app reads st.query_params, which is a string
+    in every version, so the tests compare strings too.
+    """
+    value = at.query_params.get(name)
+    return value[0] if isinstance(value, list) else value
+
+
 def test_flavor_sheet_create_then_add_a_flavor(app):
     app.text_input(key="new_sheet_customer").input("Acme")
     app.number_input(key="new_sheet_servings").set_value(30)
     next(b for b in app.button if b.label == "Create flavor sheet").click().run()
     assert not app.exception
-    assert app.query_params.get("sheet")
+    assert _param(app, "sheet")
 
     next(b for b in app.button if b.label == "Add flavor").click().run()
     assert not app.exception
-    assert app.query_params.get("flavor") not in (None, "new")
+    assert _param(app, "flavor") not in (None, "new")
     assert any(b.label == "Save flavor" for b in app.button)
 
 
@@ -100,9 +111,9 @@ def test_flavor_sheet_folders_browse_to_a_sheet_and_back_up(db_path):
     assert next(t for t in at.text_input if t.label == "Quote ID").value == "Q-1"
 
     _click(at, "Mango")
-    assert at.query_params.get("sheet") == [str(newest)]
+    assert _param(at, "sheet") == str(newest)
     _click(at, "› 📁 Acme")
-    assert not at.query_params.get("sheet")
+    assert not _param(at, "sheet")
     assert any("Pre-Workout · Q-1" in b.label for b in at.button)
 
 
@@ -116,7 +127,7 @@ def test_flavor_sheet_search_opens_a_match(db_path):
     at.run()
     at.text_input(key="flavor_sheet_search").input("raspberry").run()
     _click(at, "📄 Acme › Pre-Workout · Q-1")
-    assert at.query_params.get("sheet") == [str(sheet)]
+    assert _param(at, "sheet") == str(sheet)
     assert at.text_input(key="flavor_sheet_search").value == ""
 
 
