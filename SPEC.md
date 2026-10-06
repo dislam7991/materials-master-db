@@ -308,6 +308,25 @@ done. The three real templates were received 2026-09-21 and are mapped in
       DoD: `pytest` shows a rename or reprice after a download still
       re-renders the original values, for both the flavor sheet and the
       labels.
+- [ ] **F7. Price in the All Materials Lookup** (user's call, 2026-10-06).
+      Today the combined tab shows stock and locations but no price, so
+      "what does this cost?" means opening a second tab. Add two columns to
+      its table: **Warehouse $/kg** (`materials.current_price_per_kilo`) and
+      **Lab $/kg** (`lab_samples.price_per_kilo`).
+      - Two columns, never one. They are different prices, from different
+        suppliers on different dates. Merging them would pass one off as
+        the other.
+      - A blank price stays blank. Never fall back to the other side's
+        price, and never show 0.
+      - Read the prices through the same per-side queries the tab already
+        calls (`get_material` / `get_lab_sample`), so this tab can't
+        disagree with the Warehouse Lookup or R&D Lab Lookup tabs. Format
+        as money, matching those tabs.
+      - Display only. No search, sort or filter changes.
+      DoD: `pytest` shows a Both row carrying both prices, a Warehouse-only
+      row with a blank Lab $/kg, a Lab-only row with a blank Warehouse $/kg,
+      and an unpriced material showing blank, not 0. The smoke test searches
+      the synthetic DB and finds the Warehouse $/kg column in the table.
 
 #### Parked in Phase F (user's call, 2026-09-24 — the automation skips these)
 
