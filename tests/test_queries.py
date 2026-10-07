@@ -368,7 +368,8 @@ LINK_SHEET_ROWS: list[RawRow] = [
     # the warehouse material's name (Sensapure "Mango 7182011").
     _material("FL-0001", "Mango 7182011",
               **{"Receiving Date": "03/15/2025", "DTF Lot #": "L-0001",
-                 "Locations": "6L-27-D", "Current Stock": "20"}),
+                 "Locations": "6L-27-D", "Current Stock": "20",
+                 "Price Per Kilo": "12.50"}),
 
     # FL-0002: the lab sheet has this one's Part # filled in, so it links on
     # Part # even though the name carries no code.
@@ -379,10 +380,11 @@ LINK_SHEET_ROWS: list[RawRow] = [
     # FL-0003: in the warehouse, unknown to the lab.
     _material("FL-0003", "Citric Acid Anhydrous",
               **{"Receiving Date": "03/17/2025", "DTF Lot #": "L-0003",
-                 "Locations": "6R-09-E", "Current Stock": "40"}),
+                 "Locations": "6R-09-E", "Current Stock": "40",
+                 "Price Per Kilo": "3.00"}),
 
     # FL-0004: a two-character code would be a substring of this name (and of
-    # half the warehouse), which is why the length floor exists.
+    # half the warehouse), which is why the length floor exists. Unpriced.
     _material("FL-0004", "Beta Alanine 770 Mesh",
               **{"Receiving Date": "03/18/2025", "DTF Lot #": "L-0004",
                  "Locations": "6R-10-A", "Current Stock": "50"}),
@@ -397,11 +399,12 @@ LINK_SHEET_ROWS: list[RawRow] = [
 ]
 
 LAB_ROWS: list[dict[str, str]] = [
-    {"RD-ID": "RD-0001", "Vendor": "Sensapure", "Flavor Name": "Mango", "Sample Code": "7182011"},
+    {"RD-ID": "RD-0001", "Vendor": "Sensapure", "Flavor Name": "Mango", "Sample Code": "7182011",
+     "Price ($/kg)": "40.00"},
     {"RD-ID": "RD-0002", "Vendor": "Prinova", "Flavor Name": "Vanilla Bean",
      "Sample Code": "60001", "Part # (If applicable)": "FL-0002"},
     {"RD-ID": "RD-0003", "Vendor": "Virginia Dare", "Flavor Name": "Pineapple Tropical",
-     "Sample Code": "60002"},
+     "Sample Code": "60002", "Price ($/kg)": "55.00"},
     {"RD-ID": "RD-0004", "Vendor": "Prinova", "Flavor Name": "Beta Test Flavor", "Sample Code": "77"},
     {"RD-ID": "RD-0005", "Vendor": "Sensapure", "Flavor Name": "Lemon Sherbet", "Sample Code": "5150"},
 ]
@@ -521,3 +524,45 @@ def test_combined_search_works_with_no_lab_catalog_loaded(conn):
     assert kinds(results) == ["Warehouse"]
     assert results[0]["material_name"] == "Split Lot Material"
     assert q.search_warehouse_and_lab(conn, "") == []
+
+
+# The All Materials Lookup tab's table rows (F7). The row builder lives in the
+# UI package, which imports Streamlit, so these skip where it isn't installed.
+
+def _table_rows(conn, term: str) -> list[dict]:
+    """Return the All Materials Lookup tab's table rows for a search."""
+    pytest.importorskip("streamlit")
+    from ui.combined_tab import _summary_row
+
+    return [_summary_row(conn, r) for r in q.search_warehouse_and_lab(conn, term)]
+
+
+def test_a_both_row_carries_both_prices_side_by_side(linked_conn):
+    """A lot price and a lab vendor quote are different numbers; one column
+    holding either would pass one off as the other."""
+    [row] = _table_rows(linked_conn, "Mango")
+
+    assert row["Where"] == "Both"
+    assert row["Warehouse $/kg"] == "$12.50"
+    assert row["Lab $/kg"] == "$40.00"
+
+
+def test_a_warehouse_only_row_leaves_the_lab_price_blank(linked_conn):
+    [row] = _table_rows(linked_conn, "Citric")
+
+    assert row["Warehouse $/kg"] == "$3.00"
+    assert row["Lab $/kg"] == "—"
+
+
+def test_a_lab_only_row_leaves_the_warehouse_price_blank(linked_conn):
+    [row] = _table_rows(linked_conn, "Pineapple")
+
+    assert row["Lab $/kg"] == "$55.00"
+    assert row["Warehouse $/kg"] == "—"
+
+
+def test_an_unpriced_material_shows_blank_not_zero(linked_conn):
+    """$0.00 would read as free; the sheet just has no price for it."""
+    [row] = _table_rows(linked_conn, "Alanine")
+
+    assert row["Warehouse $/kg"] == "—"

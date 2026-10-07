@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from dtf_materials import queries as q
+from ui.common import money
 
 
 def render(conn: sqlite3.Connection, summary: dict) -> None:
@@ -59,18 +60,23 @@ def _summary_row(conn: sqlite3.Connection, result: dict) -> dict:
     """Build one table row from a combined search result plus each side's detail.
 
     Each side's detail comes from the same queries the single-catalog tabs use,
-    so the two views can't drift apart.
+    so the two views can't drift apart. The two prices stay in two columns and
+    a blank one stays a dash: a lot price and a lab vendor quote are different
+    numbers, and borrowing one for the other would pass it off as something
+    it isn't.
     """
-    warehouse = {"Stock": None, "Stocked locations": "—"}
+    warehouse = {"Stock": None, "Stocked locations": "—", "Warehouse $/kg": "—"}
     if result["material_id"] is not None:
         stocked = q.get_stocked_locations(conn, result["material_id"])
+        material = q.get_material(conn, result["material_id"])
         warehouse = {
             "Stock": q.total_stock(conn, result["material_id"]),
             # Listed, not summed: no quantity is attached to a location here.
             "Stocked locations": ", ".join(r["location"] for r in stocked) or "—",
+            "Warehouse $/kg": money(material["current_price_per_kilo"]),
         }
 
-    lab = {"Lab location": "—", "Declaration": "—"}
+    lab = {"Lab location": "—", "Declaration": "—", "Lab $/kg": "—"}
     sample = (
         q.get_lab_sample(conn, result["lab_sample_id"])
         if result["lab_sample_id"] is not None else None
@@ -79,6 +85,7 @@ def _summary_row(conn: sqlite3.Connection, result: dict) -> dict:
         lab = {
             "Lab location": sample["location_lab"] or "—",
             "Declaration": sample["declaration_type"] or "—",
+            "Lab $/kg": money(sample["price_per_kilo"]),
         }
 
     return {

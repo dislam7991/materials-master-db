@@ -61,7 +61,7 @@ def test_location_search_shows_a_table(app):
 def test_combined_search_shows_a_table(app):
     app.text_input(key="combined").input("a").run()
     assert not app.exception
-    assert app.dataframe
+    assert "Warehouse $/kg" in app.dataframe[0].value.columns
 
 
 def _param(at: AppTest, name: str) -> str | None:

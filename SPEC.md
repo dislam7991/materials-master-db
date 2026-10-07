@@ -308,7 +308,7 @@ done. The three real templates were received 2026-09-21 and are mapped in
       DoD: `pytest` shows a rename or reprice after a download still
       re-renders the original values, for both the flavor sheet and the
       labels.
-- [ ] **F7. Price in the All Materials Lookup** (user's call, 2026-10-06).
+- [x] **F7. Price in the All Materials Lookup** (user's call, 2026-10-06).
       Today the combined tab shows stock and locations but no price, so
       "what does this cost?" means opening a second tab. Add two columns to
       its table: **Warehouse $/kg** (`materials.current_price_per_kilo`) and
