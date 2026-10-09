@@ -165,6 +165,27 @@ def test_record_sheet_tab_shows_the_copy_block(db_path):
     assert any("Mystery powder" in w.value for w in at.warning)
 
 
+def test_record_sheet_flavor_dropdown_uses_the_underscore_label(db_path):
+    conn = db.init_db(db_path)
+    sheet_id = fs.create_sheet(conn, customer="Acme", servings=30)
+    fs.add_profile(conn, sheet_id, flavor_name="Peach", sample_id="X260927-01")
+    conn.close()
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+
+    assert not at.exception
+    assert "Peach_X260927-01" in at.selectbox(key="record_flavor").options
+
+
+def test_flavor_label_joins_name_and_sample_id_with_an_underscore():
+    from ui.sample_record_tab import flavor_label
+
+    assert flavor_label({"flavor_name": "Peach", "sample_id": "X260927-01"}) == "Peach_X260927-01"
+    assert flavor_label({"flavor_name": "Peach", "sample_id": None}) == "Peach"
+    assert flavor_label({"flavor_name": None, "sample_id": None}) == "(unnamed)"
+
+
 def test_scoops_per_serving_is_remembered_for_the_product(db_path):
     conn = db.init_db(db_path)
     sheet_id = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", servings=30)
