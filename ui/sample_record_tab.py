@@ -15,6 +15,13 @@ from dtf_materials import flavor_sheets as fs
 from dtf_materials.record_copy_block import build_block
 
 
+def flavor_label(profile) -> str:
+    """The Flavor dropdown label: `Flavor_Sample-ID`, no spaces, so it pastes
+    straight into a real sample record sheet (SPEC F8). No Sample ID gives the
+    name alone; a flavor with no name stays `(unnamed)`."""
+    return "_".join(filter(None, [profile["flavor_name"] or "(unnamed)", profile["sample_id"]]))
+
+
 def render(conn: sqlite3.Connection) -> None:
     """Draw the tab: pick a flavor sheet and a flavor, then show its copy block."""
     st.write(
@@ -38,9 +45,7 @@ def render(conn: sqlite3.Connection) -> None:
         return
     profile_id = st.selectbox(
         "Flavor", list(profiles), key="record_flavor",
-        format_func=lambda i: " · ".join(
-            filter(None, [profiles[i]["flavor_name"] or "(unnamed)", profiles[i]["sample_id"]])
-        ),
+        format_func=lambda i: flavor_label(profiles[i]),
     )
 
     block = build_block(conn, profile_id)

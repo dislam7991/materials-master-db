@@ -327,7 +327,7 @@ done. The three real templates were received 2026-09-21 and are mapped in
       row with a blank Lab $/kg, a Lab-only row with a blank Warehouse $/kg,
       and an unpriced material showing blank, not 0. The smoke test searches
       the synthetic DB and finds the Warehouse $/kg column in the table.
-- [ ] **F8. Underscore in the Sample Record Sheet flavor dropdown** (user's
+- [x] **F8. Underscore in the Sample Record Sheet flavor dropdown** (user's
       call, 2026-10-08). In the Sample Record Sheet tab, the **Flavor**
       dropdown labels each option `Flavor · Sample-ID`. Change it to
       `Flavor_Sample-ID` (an underscore, no spaces) so the label pastes
