@@ -327,6 +327,20 @@ done. The three real templates were received 2026-09-21 and are mapped in
       row with a blank Lab $/kg, a Lab-only row with a blank Warehouse $/kg,
       and an unpriced material showing blank, not 0. The smoke test searches
       the synthetic DB and finds the Warehouse $/kg column in the table.
+- [ ] **F8. Underscore in the Sample Record Sheet flavor dropdown** (user's
+      call, 2026-10-08). In the Sample Record Sheet tab, the **Flavor**
+      dropdown labels each option `Flavor · Sample-ID`. Change it to
+      `Flavor_Sample-ID` (an underscore, no spaces) so the label pastes
+      straight into a real sample record sheet.
+      - Label only. The option values, the copy block and every other tab
+        stay as they are.
+      - A flavor with no Sample ID shows just its name, as today. An
+        unnamed flavor keeps `(unnamed)`.
+      - The change is the `" · ".join(...)` in `ui/sample_record_tab.py`.
+        The Flavor sheet dropdown keeps its `·`.
+      DoD: `pytest` covers the label for a flavor with a Sample ID
+      (`Peach_X260927-01`), one without (name only) and an unnamed one. The
+      smoke test finds the underscore label in the Flavor dropdown.
 
 #### Parked in Phase F (user's call, 2026-09-24 — the automation skips these)
 
