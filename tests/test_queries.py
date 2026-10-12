@@ -561,6 +561,54 @@ def test_a_lab_only_row_leaves_the_warehouse_price_blank(linked_conn):
     assert row["Warehouse $/kg"] == "—"
 
 
+def test_search_box_options_say_where_each_match_is_and_carry_the_whole_result(linked_conn):
+    """The All Materials Lookup box suggests every match as the user types.
+    The label says which side a row is on; the value is the full result,
+    because a Both row needs both ids to build its summary."""
+    pytest.importorskip("streamlit")
+    from ui.combined_tab import _search_options
+
+    options = _search_options(linked_conn, "a")
+    labels = [label for label, _ in options]
+
+    assert len(options) == len(q.search_warehouse_and_lab(linked_conn, "a"))
+    assert any(label.startswith("Both: ") for label in labels)
+    assert any(label.startswith("Lab: ") for label in labels)
+    for label, result in options:
+        assert label.startswith(f"{result['kind']}: ")
+        assert set(result) >= {"kind", "material_id", "lab_sample_id"}
+
+
+# The search boxes show every match, not a capped page (user's call,
+# 2026-10-12): a cap hides real materials behind whichever ten sorted first.
+
+@pytest.fixture
+def bulk_conn(tmp_path):
+    """A database with more matching materials than the old cap of 10 or 50."""
+    rows = [_material(f"BK-{n:04d}", f"Bulk Material {n:03d}") for n in range(60)]
+    db_path = tmp_path / "test_bulk.db"
+    etl.run(ListSource(rows), db_path)
+    connection = connect(db_path)
+    yield connection
+    connection.close()
+
+
+def test_search_returns_every_match_by_default(bulk_conn):
+    assert len(q.search_materials(bulk_conn, "Bulk")) == 60
+    assert len(q.search_warehouse_and_lab(bulk_conn, "Bulk")) == 60
+
+
+def test_a_caller_can_still_ask_for_a_cap(bulk_conn):
+    assert len(q.search_materials(bulk_conn, "Bulk", limit=10)) == 10
+
+
+def test_warehouse_search_box_options_are_uncapped(bulk_conn):
+    pytest.importorskip("streamlit")
+    from ui.material_tab import _material_options
+
+    assert len(_material_options(bulk_conn, "Bulk")) == 60
+
+
 def test_an_unpriced_material_shows_blank_not_zero(linked_conn):
     """$0.00 would read as free; the sheet just has no price for it."""
     [row] = _table_rows(linked_conn, "Alanine")

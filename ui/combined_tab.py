@@ -6,13 +6,14 @@ import sqlite3
 
 import pandas as pd
 import streamlit as st
+from streamlit_searchbox import st_searchbox
 
 from dtf_materials import queries as q
 from ui.common import money
 
 
 def render(conn: sqlite3.Connection, summary: dict) -> None:
-    """Draw the tab: a search box and one summary row per warehouse/lab match."""
+    """Draw the tab: a search box suggesting every match, then the picked one's summary row."""
     st.write(
         "One search over both catalogs, for when you don't yet know which one "
         "holds the answer: is this in the warehouse, in the lab, or both?"
@@ -25,23 +26,24 @@ def render(conn: sqlite3.Connection, summary: dict) -> None:
             "can only come from the warehouse. See the **R&D Lab Lookup** tab."
         )
 
-    term = st.text_input(
-        "Search by part number, material or flavor name, sample code, or vendor",
+    result = st_searchbox(
+        lambda term: _search_options(conn, term),
+        label="Search by part number, material or flavor name, sample code, or vendor",
         placeholder="e.g. 15-009, mango, 7182011, sensapure",
-        key="combined",
-    ).strip()
+        key="combined_searchbox",
+    )
 
-    if not term:
+    # A stale pick (the database was rebuilt under an open page) finds no row.
+    # No st.stop() here: it would end the whole run and blank every later tab.
+    if not result:
         st.info("Type anything either catalog might know it by.")
         return
-
-    found = q.search_warehouse_and_lab(conn, term, limit=25)
-    if not found:
-        st.warning(f"Nothing matching “{term}” in the warehouse or the lab.")
+    if not _still_exists(conn, result):
+        st.warning("That row is no longer in the database. Search again.")
         return
 
     st.dataframe(
-        pd.DataFrame([_summary_row(conn, result) for result in found]),
+        pd.DataFrame([_summary_row(conn, result)]),
         hide_index=True, width="stretch",
         column_config={"Stock": st.column_config.NumberColumn(format="%.2f")},
     )
@@ -54,6 +56,38 @@ def render(conn: sqlite3.Connection, summary: dict) -> None:
         "full stock reconciliation, and the **R&D Lab Lookup** tab has the "
         "vendor and sensory detail."
     )
+
+
+def _search_options(conn: sqlite3.Connection, term: str) -> list[tuple[str, dict]]:
+    """Return every (label, result) search-box option for a typed term, uncapped.
+
+    The option's value is the whole combined-search result, because a row is
+    identified by both of its sides: a Both row needs its material and its
+    lab sample to build the summary.
+    """
+    return [(_option_label(r), r) for r in q.search_warehouse_and_lab(conn, term)]
+
+
+def _still_exists(conn: sqlite3.Connection, result: dict) -> bool:
+    """Return whether every side the result names is still in the database."""
+    material_ok = (
+        result["material_id"] is None
+        or q.get_material(conn, result["material_id"]) is not None
+    )
+    lab_ok = (
+        result["lab_sample_id"] is None
+        or q.get_lab_sample(conn, result["lab_sample_id"]) is not None
+    )
+    return material_ok and lab_ok
+
+
+def _option_label(result: dict) -> str:
+    """Name a combined-search result the way its own catalog would, prefixed by where it is."""
+    if result["kind"] == "Lab":
+        who = f"{result['sample_code'] or '(no code)'} — {result['flavor_name'] or '(unnamed)'}"
+    else:
+        who = f"{result['dtf_part_num'] or '(no part #)'} — {result['material_name']}"
+    return f"{result['kind']}: {who}"
 
 
 def _summary_row(conn: sqlite3.Connection, result: dict) -> dict:
