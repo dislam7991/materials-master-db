@@ -44,10 +44,10 @@ def render(conn: sqlite3.Connection) -> None:
 
 
 def _material_options(conn: sqlite3.Connection, term: str) -> list[tuple[str, int]]:
-    """Return (label, material_id) search-box options for a typed term."""
+    """Return every (label, material_id) search-box option for a typed term, uncapped."""
     return [
         (f"{r['dtf_part_num'] or '(no part #)'} — {r['material_name']}", r["material_id"])
-        for r in q.search_materials(conn, term, limit=10)
+        for r in q.search_materials(conn, term)
     ]
 
 

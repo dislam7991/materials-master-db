@@ -12,6 +12,11 @@ import sqlite3
 _LIKE_ESCAPE = "!"
 
 
+def _limit(limit: int | None) -> int:
+    """Return the value to bind to LIMIT: -1 means no limit in SQLite."""
+    return -1 if limit is None else limit
+
+
 def _like(term: str) -> str:
     """Return a %substring% LIKE pattern with the user's % and _ escaped (with '!') to match literally."""
     escaped = (
@@ -22,8 +27,14 @@ def _like(term: str) -> str:
     return f"%{escaped}%"
 
 
-def search_materials(conn: sqlite3.Connection, term: str, limit: int = 50) -> list[sqlite3.Row]:
-    """Return materials whose Part # or name contains the term, exact/prefix Part # matches first."""
+def search_materials(
+    conn: sqlite3.Connection, term: str, limit: int | None = None
+) -> list[sqlite3.Row]:
+    """Return materials whose Part # or name contains the term, exact/prefix Part # matches first.
+
+    Every match is returned unless `limit` is given: the search boxes show the
+    whole list so a typed term never hides a real material.
+    """
     if not term or not term.strip():
         return []
     term = term.strip()
@@ -45,12 +56,17 @@ def search_materials(conn: sqlite3.Connection, term: str, limit: int = 50) -> li
             m.material_name
         LIMIT ?
         """,
-        (pattern, pattern, term, term, limit),
+        (pattern, pattern, term, term, _limit(limit)),
     ).fetchall()
 
 
-def search_lab_samples(conn: sqlite3.Connection, term: str, limit: int = 50) -> list[sqlite3.Row]:
-    """Return lab samples whose vendor, flavor, sample code or Part # contains the term, exact/prefix code first."""
+def search_lab_samples(
+    conn: sqlite3.Connection, term: str, limit: int | None = None
+) -> list[sqlite3.Row]:
+    """Return lab samples whose vendor, flavor, sample code or Part # contains the term, exact/prefix code first.
+
+    Every match is returned unless `limit` is given, as in search_materials.
+    """
     if not term or not term.strip():
         return []
     term = term.strip()
@@ -73,7 +89,7 @@ def search_lab_samples(conn: sqlite3.Connection, term: str, limit: int = 50) -> 
             flavor_name
         LIMIT ?
         """,
-        (pattern, pattern, pattern, pattern, term, term, limit),
+        (pattern, pattern, pattern, pattern, term, term, _limit(limit)),
     ).fetchall()
 
 
@@ -142,13 +158,13 @@ def _combined_result(kind: str, material=None, lab=None, match_rule=None) -> dic
 
 
 def search_warehouse_and_lab(
-    conn: sqlite3.Connection, term: str, limit: int = 50
+    conn: sqlite3.Connection, term: str, limit: int | None = None
 ) -> list[dict]:
     """Search both catalogs and return rows labelled Both (with match_rule), Warehouse or Lab.
 
     Returns identity and labels only; callers fetch detail with the existing
-    per-side queries. `limit` applies to each side, so a term matching both
-    catalogs can return more than `limit` rows.
+    per-side queries. `limit`, when given, applies to each side, so a term
+    matching both catalogs can return more than `limit` rows.
     """
     materials = search_materials(conn, term, limit)
     lab_samples = search_lab_samples(conn, term, limit)

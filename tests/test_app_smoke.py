@@ -58,10 +58,11 @@ def test_location_search_shows_a_table(app):
     assert app.dataframe
 
 
-def test_combined_search_shows_a_table(app):
-    app.text_input(key="combined").input("a").run()
+def test_combined_tab_prompts_until_a_pick_is_made(app):
+    """The search box is a custom component AppTest can't type into, so the
+    option builder is tested in test_queries; here, only that the tab asks."""
     assert not app.exception
-    assert "Warehouse $/kg" in app.dataframe[0].value.columns
+    assert any("either catalog" in i.value for i in app.info)
 
 
 def _param(at: AppTest, name: str) -> str | None:
