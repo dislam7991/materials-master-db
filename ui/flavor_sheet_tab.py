@@ -509,10 +509,12 @@ def _render_line_table(conn: sqlite3.Connection, profile, lines: list, servings)
         column_config=LINE_TABLE_COLUMNS,
     )
     base_g = fs.grams_per_sample(profile["base_mg"], servings)
+    total = total_caption(fs.profile_total(profile, lines, servings))
     st.caption(
         "Type mg straight into the table; tick **Remove** to drop a line; change "
         "**#** to reorder. Changes save as you make them."
         + (f" BASE: {base_g:,.3f} g per sample." if base_g is not None else "")
+        + (f" {total}" if total else "")
     )
 
 
@@ -558,6 +560,29 @@ def cost_caption(cost: dict, servings) -> str | None:
     if cost["unpriced"]:
         return f"No prices on file for these {cost['unpriced']} material(s) yet, so no cost estimate."
     return None
+
+
+def total_caption(total: dict) -> str | None:
+    """Return the "Total (BASE + n lines)" sentence for a flavor (from fs.profile_total), or None if nothing has an amount.
+
+    Names what the sum leaves out (a blank BASE, lines with no mg yet) so a
+    partial total is never read as the whole serving.
+    """
+    if total["mg"] is None:
+        return None
+    parts = (["BASE"] if total["base_set"] else []) + (
+        [f"{total['lines']} line{'s' if total['lines'] != 1 else ''}"] if total["lines"] else []
+    )
+    mg = f"{total['mg']:,.3f}".rstrip("0").rstrip(".") or "0"
+    text = f"**Total ({' + '.join(parts)}): {mg} mg / serving"
+    if total["grams"] is not None:
+        text += f" = {total['grams']:,.3f} g per sample"
+    text += "**"
+    notes = [] if total["base_set"] else ["BASE not set"]
+    if total["blank_lines"]:
+        n = total["blank_lines"]
+        notes.append(f"{n} line{'s have' if n != 1 else ' has'} no mg yet")
+    return text + (f" — {', '.join(notes)}." if notes else ".")
 
 
 # --- download / delete -------------------------------------------------------

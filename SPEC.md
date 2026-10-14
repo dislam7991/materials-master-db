@@ -341,7 +341,7 @@ done. The three real templates were received 2026-09-21 and are mapped in
       DoD: `pytest` covers the label for a flavor with a Sample ID
       (`Peach_X260927-01`), one without (name only) and an unnamed one. The
       smoke test finds the underscore label in the Flavor dropdown.
-- [ ] **F9. Total amount per flavor on the Flavor Sheet tab** (user's call,
+- [x] **F9. Total amount per flavor on the Flavor Sheet tab** (user's call,
       2026-10-13). Under each flavor's line table, show the **total of BASE
       plus every flavor-profile line**, as mg / serving and g / sample, so
       the user sees the whole serving without adding it up. Bottom, not top
