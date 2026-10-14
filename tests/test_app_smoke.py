@@ -1,7 +1,7 @@
 """Smoke tests for the Streamlit app: every tab renders, and the Flavor Sheet
 workflow runs from new sheet to flavor editor.
 
-The app has no logic of its own worth unit-testing beyond `cost_caption` —
+The app has no logic of its own worth unit-testing beyond `cost_caption` and `total_caption` —
 queries.py and flavor_sheets.py are tested directly — so these only prove the
 UI wiring holds together. Skipped where Streamlit isn't installed (CI installs
 pytest only).
@@ -149,6 +149,35 @@ def test_open_flavor_shows_its_lines_and_cost(db_path):
     assert not at.exception
     assert any("Mystery powder" in str(df.value) for df in at.dataframe)
     assert any("Rough material cost" in c.value or "No prices on file" in c.value for c in at.caption)
+
+
+def test_open_flavor_shows_its_total_under_the_table(db_path):
+    conn = db.init_db(db_path)
+    sheet_id = fs.create_sheet(conn, customer="Acme", servings=4)
+    profile_id = fs.add_profile(conn, sheet_id, flavor_name="Peach", base_mg=12000)
+    fs.add_line(conn, profile_id, typed_name="Peach flavor", mg_per_serving=350)
+    conn.close()
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.query_params["sheet"] = str(sheet_id)
+    at.query_params["flavor"] = str(profile_id)
+    at.run()
+
+    assert not at.exception
+    assert any(
+        "Total (BASE + 1 line): 12,350 mg / serving = 49.400 g per sample" in c.value
+        for c in at.caption
+    )
+
+
+def test_total_caption_names_what_it_leaves_out():
+    from ui.flavor_sheet_tab import total_caption
+
+    full = {"mg": 12350.0, "grams": 49.4, "lines": 3, "blank_lines": 0, "base_set": True}
+    assert total_caption(full) == "**Total (BASE + 3 lines): 12,350 mg / serving = 49.400 g per sample**."
+    partial = {"mg": 200.5, "grams": None, "lines": 1, "blank_lines": 2, "base_set": False}
+    assert total_caption(partial) == "**Total (1 line): 200.5 mg / serving** — BASE not set, 2 lines have no mg yet."
+    assert total_caption({"mg": None, "grams": None, "lines": 0, "blank_lines": 1, "base_set": False}) is None
 
 
 def test_record_sheet_tab_shows_the_copy_block(db_path):

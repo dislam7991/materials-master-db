@@ -141,6 +141,26 @@ def profile_cost(lines, servings: float | None = None) -> dict:
     }
 
 
+def profile_total(profile, lines, servings: float | None = None) -> dict:
+    """Return a flavor's whole serving: BASE plus every line, as mg, grams per sample and counts.
+
+    A blank is never 0: a line with no mg yet is left out and counted in
+    `blank_lines`, a blank BASE is left out and flagged by `base_set`, so the
+    caller can say what the sum excludes. mg is None when nothing has an amount.
+    """
+    amounts = [line["mg_per_serving"] for line in lines if line["mg_per_serving"] is not None]
+    base_set = profile["base_mg"] is not None
+    parts = amounts + [profile["base_mg"]] if base_set else amounts
+    mg = sum(parts) if parts else None
+    return {
+        "mg": mg,
+        "grams": grams_per_sample(mg, servings),
+        "lines": len(amounts),
+        "blank_lines": len(lines) - len(amounts),
+        "base_set": base_set,
+    }
+
+
 # --- flavor profiles -------------------------------------------------------
 
 def get_profiles(conn: sqlite3.Connection, flavor_sheet_id: int) -> list[sqlite3.Row]:

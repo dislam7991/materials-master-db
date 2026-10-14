@@ -276,6 +276,41 @@ def test_profile_cost_is_none_when_nothing_prices(conn):
     assert cost["priced"] == 0 and cost["unpriced"] == 1
 
 
+def test_profile_total_sums_base_and_every_line(conn):
+    profile_id = fs.add_profile(conn, fs.create_sheet(conn, servings=4), "Berry", base_mg=12000)
+    fs.add_line(conn, profile_id, typed_name="A", mg_per_serving=200)
+    fs.add_line(conn, profile_id, typed_name="B", mg_per_serving=150)
+    profile = conn.execute(
+        "SELECT * FROM flavor_profiles WHERE flavor_profile_id = ?", (profile_id,)
+    ).fetchone()
+
+    total = fs.profile_total(profile, fs.get_lines(conn, profile_id), servings=4)
+    assert total["mg"] == 12350
+    assert total["grams"] == pytest.approx(49.4)  # 12,350 mg x 4 servings
+    assert total["lines"] == 2 and total["blank_lines"] == 0 and total["base_set"]
+    assert fs.profile_total(profile, fs.get_lines(conn, profile_id), servings=10)["grams"] == pytest.approx(123.5)
+    assert fs.profile_total(profile, fs.get_lines(conn, profile_id))["grams"] is None
+
+
+def test_profile_total_leaves_blanks_out_and_counts_them(conn):
+    profile_id = fs.add_profile(conn, fs.create_sheet(conn, servings=4), "Berry")  # no BASE
+    fs.add_line(conn, profile_id, typed_name="A", mg_per_serving=200)
+    fs.add_line(conn, profile_id, typed_name="No amount yet")
+    fs.add_line(conn, profile_id, typed_name="Nor this")
+    profile = {"base_mg": None}
+
+    total = fs.profile_total(profile, fs.get_lines(conn, profile_id), servings=4)
+    assert total["mg"] == 200
+    assert total["lines"] == 1 and total["blank_lines"] == 2 and not total["base_set"]
+
+
+def test_profile_total_with_no_lines_is_base_alone():
+    total = fs.profile_total({"base_mg": 12000}, [], servings=4)
+    assert total["mg"] == 12000 and total["grams"] == 48 and total["lines"] == 0
+    nothing = fs.profile_total({"base_mg": None}, [], servings=4)
+    assert nothing["mg"] is None and nothing["grams"] is None
+
+
 def test_cost_helpers():
     assert fs.line_cost_per_serving(200, 50) == pytest.approx(0.01)
     assert fs.line_cost_per_serving(None, 50) is None
