@@ -341,6 +341,65 @@ done. The three real templates were received 2026-09-21 and are mapped in
       DoD: `pytest` covers the label for a flavor with a Sample ID
       (`Peach_X260927-01`), one without (name only) and an unnamed one. The
       smoke test finds the underscore label in the Flavor dropdown.
+- [ ] **F9. Total amount per flavor on the Flavor Sheet tab** (user's call,
+      2026-10-13). Under each flavor's line table, show the **total of BASE
+      plus every flavor-profile line**, as mg / serving and g / sample, so
+      the user sees the whole serving without adding it up. Bottom, not top
+      (Claude's call, as invited): the BASE figure already sits in the
+      caption under the table, and the total belongs beside it, after the
+      lines it sums.
+      - A summary line under the table, **not a row in it**. The line table
+        is an editor that maps each row to a saved line by position; a Total
+        row would be editable and shift that mapping. Extend the caption that
+        shows BASE, e.g. `BASE: 12.000 g per sample · Total (BASE + 3 lines):
+        12,350 mg / serving = 12.350 g per sample`. Same 3-decimal grams as
+        the table, through `grams_per_sample`.
+      - A blank is never 0. A line with no mg yet is left out of the sum and
+        counted beside it (`2 lines have no mg yet`), the way `profile_cost`
+        counts unpriced lines; a blank BASE is left out and named (`BASE not
+        set`). No lines → the total is BASE alone.
+      - The sum lives in `dtf_materials/flavor_sheets.py` next to
+        `profile_cost` (e.g. `profile_total(profile, lines, servings)`), not
+        in the tab. The labels' `serving_grams` keeps its own half-up 1-decimal
+        rounding; the two must agree on what goes in (BASE + every line,
+        nothing else).
+      - **Not in the Sample Record Sheet tab** (user's call). The flavor
+        sheet `.xlsx` renderer, the labels and the snapshots are untouched.
+      DoD: `pytest` on the sum: BASE + lines, a blank line and a blank BASE
+      left out and counted, no lines gives BASE alone, g / sample follows
+      servings. The smoke test adds a flavor with a BASE and one line and
+      finds the Total under its table.
+- [ ] **F10. Copy a flavor from any sheet into a new one** (user's call,
+      2026-10-13). Today "Start from" on the Add flavor form only offers
+      flavors on the same sheet. The user had to revise a formula two weeks
+      after sending it, and wants to **start a fresh flavor sheet by
+      importing one or two flavors from the last one**, not add another
+      entry to the old sheet: a fresh sheet is a fresh flight of samples,
+      downloaded and printed on its own, and most of the old flavors won't
+      be in it.
+      - **Start from** on the Add flavor form offers flavors from **every
+        sheet**, this one first, then the rest newest sheet first, each
+        labelled `Customer › Product · Quote ID › n. Flavor_Sample-ID` so
+        two "Peach" entries are tellable apart. A searchbox, not a plain
+        dropdown, once the list is long; one flavor per pick, repeated for
+        each flavor wanted.
+      - **New flavor sheet from this one**, on an open sheet: creates a new
+        sheet with the same customer, product, quote ID, servings and prefix
+        (editable before create, as the new-sheet form is) and **no
+        flavors**; the user then adds the one or two they want through
+        Start from. The old sheet is not changed, not linked, not
+        archived. No "copy all" button — the point is picking.
+      - A copy takes the flavor's BASE and its lines (material / lab
+        reference, typed name, mg). It does **not** take the Sample ID — the
+        new sheet suggests its own, as today — and it does not freeze
+        prices: lines read today's price from the catalog, as every line
+        does. `add_profile(copy_lines_from=…)` already copies across sheets;
+        the work is in the picker and the new-sheet entry point.
+      DoD: `pytest` copies a flavor from sheet A into sheet B and shows B's
+      copy has A's BASE and lines, its own Sample ID, and editing it leaves
+      A untouched; a sheet created "from" another carries the five header
+      fields and zero flavors. The smoke test opens a sheet, starts a new
+      one from it, and finds the old sheet's flavor under Start from.
 
 #### Parked in Phase F (user's call, 2026-09-24 — the automation skips these)
 
