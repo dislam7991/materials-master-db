@@ -523,6 +523,25 @@ def search_sheets(conn: sqlite3.Connection, term: str) -> list[dict]:
     ]
 
 
+def copy_sources(conn: sqlite3.Connection, flavor_sheet_id: int) -> list[tuple[int, str]]:
+    """Return every flavor a new one can start from, as (profile id, label): this sheet's first, then other sheets newest first.
+
+    Any sheet, not just this one: a revised formula starts a fresh sheet from
+    one or two flavors of the last (F10). The label carries the folder path,
+    `Customer › Product · Quote ID › n. Flavor_Sample-ID`, so two "Peach"
+    flavors on different sheets can be told apart.
+    """
+    entries = sorted(_sheets_with_profiles(conn), key=lambda e: e["sheet"]["flavor_sheet_id"] != flavor_sheet_id)
+
+    def label(sheet, profile) -> str:
+        """Return one flavor's picker label, with placeholders for a blank header or name."""
+        customer, product, quote_id = (sheet[f] or BLANK_LABELS[f] for f in FOLDER_FIELDS)
+        flavor = "_".join(filter(None, [profile["flavor_name"] or "(unnamed)", profile["sample_id"]]))
+        return f"{customer} › {product} · {quote_id} › {profile['position']}. {flavor}"
+
+    return [(p["flavor_profile_id"], label(e["sheet"], p)) for e in entries for p in e["profiles"]]
+
+
 def rename_customer(conn: sqlite3.Connection, customer_key: str, new_name: str | None) -> int:
     """Set the customer on every sheet in one customer folder and return how many changed.
 

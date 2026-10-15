@@ -132,6 +132,54 @@ def test_copying_a_profile_brings_base_and_lines(conn):
     assert fs.get_lines(conn, first)[0]["mg_per_serving"] == 1200
 
 
+
+def test_copying_a_flavor_from_another_sheet_keeps_the_original_untouched(conn):
+    old = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", quote_id="Q-1", servings=30)
+    peach = fs.add_profile(conn, old, "Peach", "X260927-01", base_mg=8400)
+    fs.add_line(conn, peach, typed_name="Acid", mg_per_serving=1200)
+    new = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", quote_id="Q-1", servings=30)
+
+    copy = fs.add_profile(conn, new, "Peach", "X261015-01", copy_lines_from=peach)
+
+    (copied,) = fs.get_profiles(conn, new)
+    assert (copied["base_mg"], copied["sample_id"]) == (8400, "X261015-01")
+    assert [(l["name"], l["mg_per_serving"]) for l in fs.get_lines(conn, copy)] == [("Acid", 1200)]
+    fs.update_profile(conn, copy, "Peach", "X261015-01", base_mg=9000)
+    fs.update_line(conn, fs.get_lines(conn, copy)[0]["flavor_profile_line_id"], mg_per_serving=1500, position=1)
+    (original,) = fs.get_profiles(conn, old)
+    assert (original["base_mg"], original["sample_id"]) == (8400, "X260927-01")
+    assert fs.get_lines(conn, peach)[0]["mg_per_serving"] == 1200
+
+
+def test_a_sheet_started_from_another_carries_its_header_and_no_flavors(conn):
+    old = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", quote_id="Q-1",
+                          servings=30, sample_prefix="X")
+    fs.add_profile(conn, old, "Peach")
+
+    # What "New flavor sheet from this one" submits, unedited.
+    new = fs.create_sheet(conn, **{k: fs.get_sheet(conn, old)[k] for k in fs.HEADER_FIELDS})
+
+    assert {k: fs.get_sheet(conn, new)[k] for k in fs.HEADER_FIELDS} == {
+        "customer": "Acme", "product": "Pre-Workout", "quote_id": "Q-1", "servings": 30, "sample_prefix": "X",
+    }
+    assert fs.get_profiles(conn, new) == []
+    assert len(fs.get_profiles(conn, old)) == 1
+
+
+def test_copy_sources_lists_this_sheet_first_then_the_newest(conn):
+    oldest = fs.create_sheet(conn, customer="Acme", product="Bar", quote_id="Q-1")
+    fs.add_profile(conn, oldest, "Peach", "X1")
+    newer = fs.create_sheet(conn, customer="Acme", product="Bar", quote_id="Q-2")
+    fs.add_profile(conn, newer, "Peach", "X2")
+    this = fs.create_sheet(conn)
+    fs.add_profile(conn, this)
+
+    assert [label for _, label in fs.copy_sources(conn, this)] == [
+        "(no customer) › (no product) · (no quote ID) › 1. (unnamed)",
+        "Acme › Bar · Q-2 › 1. Peach_X2",
+        "Acme › Bar · Q-1 › 1. Peach_X1",
+    ]
+
 def test_deleting_a_profile_closes_the_gap(conn):
     sheet = fs.create_sheet(conn)
     a, b, c = (fs.add_profile(conn, sheet, n) for n in ("A", "B", "C"))

@@ -74,6 +74,8 @@ def render(conn: sqlite3.Connection) -> None:
 
     sheet_id = sheet["flavor_sheet_id"]
     _render_sheet_details(conn, sheet)
+    _render_new_sheet_form(conn, {k: sheet[k] for k in fs.HEADER_FIELDS}, f"from_sheet_{sheet_id}",
+                           label="➕ New flavor sheet from this one")
     profiles = fs.get_profiles(conn, sheet_id)
     picked = _pick_flavor(sheet_id, profiles)
     if picked == ADD_FLAVOR:
@@ -294,9 +296,16 @@ def _sheet_header_inputs(current, key: str) -> dict:
     return {k: (v.strip() or None) if isinstance(v, str) else v for k, v in values.items()}
 
 
-def _render_new_sheet_form(conn: sqlite3.Connection, prefill: dict, key: str, expanded: bool = False) -> None:
-    """Draw the header form for a new sheet, pre-filled from the folder it's started in, and open the sheet once created."""
-    label = "➕ New flavor sheet here" if prefill else "➕ New flavor sheet"
+def _render_new_sheet_form(
+    conn: sqlite3.Connection, prefill: dict, key: str, expanded: bool = False, label: str | None = None,
+) -> None:
+    """Draw the header form for a new sheet, pre-filled from the folder or sheet it's started from, and open the sheet once created.
+
+    Started from an open sheet (F10), it copies the header only: the new
+    sheet is a fresh flight of samples, so its flavors are picked one by one
+    through Start from, and the old sheet is left as it was.
+    """
+    label = label or ("➕ New flavor sheet here" if prefill else "➕ New flavor sheet")
     with st.expander(label, expanded=expanded), st.form(f"{key}_form"):
         header = _sheet_header_inputs({k: prefill.get(k) for k in fs.HEADER_FIELDS}, key)
         create = st.form_submit_button("Create flavor sheet", type="primary")
@@ -339,13 +348,14 @@ def _pick_flavor(sheet_id: int, profiles: list) -> int | str:
 
 
 def _render_add_flavor_form(conn: sqlite3.Connection, sheet, profiles: list) -> None:
-    """Draw the new-flavor form: name, suggested Sample ID, and an optional flavor to copy.
+    """Draw the new-flavor form: name, suggested Sample ID, and an optional flavor to copy from any sheet.
 
-    Copying is the default because flavors on one sheet usually share their
-    base, acids and sweeteners.
+    Copying this sheet's last flavor is the default because flavors on one
+    sheet usually share their base, acids and sweeteners. The Sample ID is
+    never copied: the new flavor is a new sample.
     """
     sheet_id = sheet["flavor_sheet_id"]
-    profile_ids = [p["flavor_profile_id"] for p in profiles]
+    sources = dict(fs.copy_sources(conn, sheet_id))
     next_position = len(profiles) + 1
     with st.form(f"add_flavor_{sheet_id}_{next_position}"):
         c1, c2, c3 = st.columns([3, 2, 3])
@@ -355,15 +365,14 @@ def _render_add_flavor_form(conn: sqlite3.Connection, sheet, profiles: list) -> 
             value=fs.suggest_sample_id(sheet["sample_prefix"], date.today(), next_position),
             key=f"new_fsid_{sheet_id}_{next_position}",
         )
+        # A selectbox filters as you type, so a long list across every sheet stays searchable.
         copy_from = c3.selectbox(
             "Start from",
-            [None] + profile_ids,
-            index=len(profile_ids),
-            format_func=lambda o: "Empty" if o is None else next(
-                f"Copy of {p['position']}. {fs.profile_title(p)}" for p in profiles
-                if p["flavor_profile_id"] == o
-            ),
+            [None, *sources],
+            index=len(profiles),
+            format_func=lambda o: "Empty" if o is None else f"Copy of {sources[o]}",
             key=f"new_fcopy_{sheet_id}_{next_position}",
+            help="Type to search flavors on every sheet: this one first, then the newest.",
         )
         if st.form_submit_button("Add flavor", type="primary"):
             new_id = fs.add_profile(
