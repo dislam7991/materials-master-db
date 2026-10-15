@@ -369,7 +369,7 @@ done. The three real templates were received 2026-09-21 and are mapped in
       left out and counted, no lines gives BASE alone, g / sample follows
       servings. The smoke test adds a flavor with a BASE and one line and
       finds the Total under its table.
-- [ ] **F10. Copy a flavor from any sheet into a new one** (user's call,
+- [x] **F10. Copy a flavor from any sheet into a new one** (user's call,
       2026-10-13). Today "Start from" on the Add flavor form only offers
       flavors on the same sheet. The user had to revise a formula two weeks
       after sending it, and wants to **start a fresh flavor sheet by

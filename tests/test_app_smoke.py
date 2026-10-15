@@ -132,6 +132,23 @@ def test_flavor_sheet_search_opens_a_match(db_path):
     assert at.text_input(key="flavor_sheet_search").value == ""
 
 
+
+def test_new_sheet_from_an_open_one_offers_its_flavors_under_start_from(db_path):
+    conn = db.init_db(db_path)
+    old = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", quote_id="Q-1", servings=30)
+    fs.add_profile(conn, old, flavor_name="Peach", sample_id="X260927-01")
+    conn.close()
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.query_params["sheet"] = str(old)
+    at.run()
+    _click(at, "Create flavor sheet")   # the "from this one" form: the only one on an open sheet
+    new = _param(at, "sheet")
+    assert new and new != str(old)
+    assert at.text_input(key=f"sheet_{new}_quote").value == "Q-1"
+    assert "Copy of Acme › Pre-Workout · Q-1 › 1. Peach_X260927-01" in at.selectbox(
+        key=f"new_fcopy_{new}_1").options
+
 def test_open_flavor_shows_its_lines_and_cost(db_path):
     conn = db.init_db(db_path)
     sheet_id = fs.create_sheet(conn, customer="Acme", servings=30)
