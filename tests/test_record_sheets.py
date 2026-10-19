@@ -12,6 +12,8 @@ Pinned here:
      at Activity 100 % / Overage 0.
   5. The loaders never touch record-sheet tables.
   6. The copy blocks put each section in the sheet's A:I shape.
+  7. A material neither catalog carries can be typed, with a typed price,
+     and an older record_lines table gains typed lines without losing rows.
 
 The arithmetic cases are the shape of a real PL Cost Sheet block (label
 claim, activity, overage) under synthetic names and prices.
@@ -213,7 +215,7 @@ def test_flavor_lines_come_from_the_profile_without_base(conn):
     rid = rs.create_record(conn, flavor_profile_id=profile)
 
     (flavor,) = rs.flavor_lines(conn, profile)
-    assert flavor == {"section": "flavor", "name": "Flavor C", "part_num": "DTF-3",
+    assert flavor == {"section": "flavor", "source": "Warehouse", "name": "Flavor C", "part_num": "DTF-3",
                       "label_claim_mg": 150, "activity": 1.0, "overage": 0.0, "price_per_kilo": 20.0}
 
     fs.update_line(conn, line, mg_per_serving=175, position=1)   # an edit on the flavor sheet
@@ -272,3 +274,97 @@ def test_record_blocks_fill_each_section_in_the_sheet_shape(conn):
     ]
     assert blocks["second"]["unpriced"] == ["Flow agent"]
     assert blocks["actives"]["text"].count("\t") == 8
+
+
+# --- typed lines ---------------------------------------------------------------------------
+
+def test_a_typed_line_carries_its_own_name_and_price(conn):
+    rid = rs.create_record(conn, servings_per_unit=5)
+    line_id = rs.add_line(conn, rid, "active", typed_name="Green Tea Extract (98% L-Theanine)")
+    rs.update_line(conn, line_id, label_claim_mg=150, activity=0.98, overage=0.0, position=1)
+    assert rs.set_typed_price(conn, line_id, 60.0)
+
+    (line,) = rs.get_lines(conn, rid, "active")
+    assert (line["source"], line["name"], line["part_num"], line["price_per_kilo"]) == (
+        "Typed", "Green Tea Extract (98% L-Theanine)", None, 60.0)
+    computed = rs.compute([line], 5, 1000)["lines"][0]
+    assert computed["actual_input_mg"] == 153.061
+    assert computed["cost_per_unit"] == pytest.approx(153.061 / 1e6 * 60.0 * 5)
+
+
+def test_a_typed_line_without_a_price_is_unpriced_not_free(conn):
+    rid = rs.create_record(conn, servings_per_unit=5)
+    line_id = rs.add_line(conn, rid, "active", typed_name="New extract")
+    rs.update_line(conn, line_id, label_claim_mg=100, activity=1.0, overage=0.0, position=1)
+    result = rs.compute(rs.get_lines(conn, rid, "active"), 5, None)
+    assert result["unpriced"] == ["New extract"]
+    assert result["totals"]["cost_per_unit"] is None
+
+
+def test_a_catalog_line_price_cannot_be_typed(conn):
+    mid = _material(conn, "Salt A", "DTF-1", price=8.0)
+    rid = rs.create_record(conn)
+    line_id = rs.add_line(conn, rid, "active", material_id=mid)
+    assert not rs.set_typed_price(conn, line_id, 1.0)
+    assert rs.get_lines(conn, rid, "active")[0]["price_per_kilo"] == 8.0
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("UPDATE record_lines SET typed_price_per_kilo = 1 WHERE record_line_id = ?", (line_id,))
+
+
+def test_a_typed_line_is_never_remembered(conn):
+    rid = rs.create_record(conn)
+    line_id = rs.add_line(conn, rid, "active", typed_name="New extract")
+    rs.update_line(conn, line_id, label_claim_mg=100, activity=0.5, overage=0.1, position=1)
+    assert conn.execute("SELECT COUNT(*) FROM material_last_used").fetchone()[0] == 0
+    second = rs.add_line(conn, rs.create_record(conn), "active", typed_name="New extract")
+    assert conn.execute("SELECT activity FROM record_lines WHERE record_line_id = ?", (second,)).fetchone()[0] is None
+
+
+def test_a_line_needs_exactly_one_source(conn):
+    mid = _material(conn, "Salt A", "DTF-1")
+    rid = rs.create_record(conn)
+    with pytest.raises(sqlite3.IntegrityError):
+        rs.add_line(conn, rid, "active")
+    with pytest.raises(sqlite3.IntegrityError):
+        rs.add_line(conn, rid, "active", material_id=mid, typed_name="Salt A")
+
+
+def test_a_typed_line_copies_with_a_blank_part_number(conn):
+    rid = rs.create_record(conn, servings_per_unit=5)
+    line_id = rs.add_line(conn, rid, "active", typed_name="Green Tea Extract (98% L-Theanine)")
+    rs.update_line(conn, line_id, label_claim_mg=150, activity=0.98, overage=0.0, position=1)
+    rs.set_typed_price(conn, line_id, 60.0)
+    assert record_blocks(conn, rid)["actives"]["rows"] == [
+        ["", "Green Tea Extract (98% L-Theanine)", "150", "0.98", "0", "153.061", "", "", "60"],
+    ]
+
+
+def test_an_older_record_lines_table_gains_typed_lines_and_keeps_its_rows(tmp_path):
+    """A database made by the first F11 commit: catalog-only CHECK, no typed columns."""
+    path = tmp_path / "old.db"
+    conn = init_db(path)
+    mid = _material(conn, "Salt A", "DTF-1")
+    rid = rs.create_record(conn, brand="Acme")
+    conn.executescript(f"""
+        DROP TABLE record_lines;
+        CREATE TABLE record_lines (
+            record_line_id INTEGER PRIMARY KEY,
+            record_sheet_id INTEGER NOT NULL REFERENCES record_sheets(record_sheet_id) ON DELETE CASCADE,
+            section TEXT NOT NULL, position INTEGER NOT NULL,
+            material_id INTEGER REFERENCES materials(material_id), rd_id TEXT REFERENCES lab_samples(rd_id),
+            label_claim_mg REAL, activity REAL, overage REAL,
+            CHECK ((material_id IS NULL) <> (rd_id IS NULL)));
+        CREATE INDEX idx_record_lines_sheet ON record_lines(record_sheet_id);
+        INSERT INTO record_lines (record_sheet_id, section, position, material_id, label_claim_mg, activity, overage)
+            VALUES ({rid}, 'active', 1, {mid}, 1000, 0.234, 0.1);
+    """)
+    conn.close()
+
+    conn = init_db(path)
+    (line,) = rs.get_lines(conn, rid, "active")
+    assert (line["name"], line["label_claim_mg"], line["activity"]) == ("Salt A", 1000, 0.234)
+    rs.add_line(conn, rid, "active", typed_name="New extract")
+    assert [l["source"] for l in rs.get_lines(conn, rid, "active")] == ["Warehouse", "Typed"]
+    assert conn.execute("SELECT name FROM sqlite_master WHERE name = 'idx_record_lines_sheet'").fetchone()
+    assert not conn.execute("SELECT name FROM sqlite_master WHERE name = 'record_lines_before_typed'").fetchone()
+    conn.close()

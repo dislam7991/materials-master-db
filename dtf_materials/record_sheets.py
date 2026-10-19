@@ -3,7 +3,9 @@
 A product's formula lives in the PL Cost Sheet as blocks of cells people
 copy and paste per quote, which no parser can read without mistakes (user,
 2026-10-19). So the actives are picked from the catalogs here, like flavor
-lines, and the record sheet is a header plus active and excipient lines. The
+lines, or typed with a typed price when the company doesn't carry the
+material yet (an experimental sample). The record sheet is a header plus
+active and excipient lines. The
 chosen flavor profile's lines join the second section at Activity 100 % /
 Overage 0, read from the profile, never copied in.
 
@@ -197,17 +199,27 @@ def add_line(
     *,
     material_id: int | None = None,
     rd_id: str | None = None,
+    typed_name: str | None = None,
 ) -> int:
-    """Append a line to a section, pre-filled with the material's last-used activity and overage, and return its id."""
-    activity, overage = last_used(conn, material_id=material_id, rd_id=rd_id)
+    """Append a line to a section and return its id.
+
+    Pass exactly one of material_id / rd_id / typed_name; the schema rejects
+    anything else. A catalog line pre-fills its material's last-used activity
+    and overage. A typed line starts blank: a typed name is no stable key to
+    remember by.
+    """
+    activity, overage = (None, None) if typed_name is not None else last_used(
+        conn, material_id=material_id, rd_id=rd_id
+    )
     (position,) = conn.execute(
         "SELECT COALESCE(MAX(position), 0) + 1 FROM record_lines WHERE record_sheet_id = ? AND section = ?",
         (record_sheet_id, section),
     ).fetchone()
     cur = conn.execute(
-        "INSERT INTO record_lines (record_sheet_id, section, position, material_id, rd_id, activity, overage) "
-        "VALUES (?,?,?,?,?,?,?)",
-        (record_sheet_id, section, position, material_id, rd_id, activity, overage),
+        "INSERT INTO record_lines "
+        "(record_sheet_id, section, position, material_id, rd_id, typed_name, activity, overage) "
+        "VALUES (?,?,?,?,?,?,?,?)",
+        (record_sheet_id, section, position, material_id, rd_id, typed_name, activity, overage),
     )
     conn.commit()
     return cur.lastrowid
@@ -231,9 +243,23 @@ def update_line(
     row = conn.execute(
         "SELECT material_id, rd_id FROM record_lines WHERE record_line_id = ?", (record_line_id,)
     ).fetchone()
-    if row is not None:
+    if row is not None and (row["material_id"] is not None or row["rd_id"] is not None):
         _remember(conn, row["material_id"], row["rd_id"], activity, overage)
     conn.commit()
+
+
+def set_typed_price(conn: sqlite3.Connection, record_line_id: int, price_per_kilo: float | None) -> bool:
+    """Set the price on a typed line and return True; a catalog line is left alone and returns False.
+
+    A catalog line's price comes from its catalog row, so a corrected price
+    is fixed in the sheet it loads from, never overridden per line.
+    """
+    cur = conn.execute(
+        "UPDATE record_lines SET typed_price_per_kilo = ? WHERE record_line_id = ? AND typed_name IS NOT NULL",
+        (price_per_kilo, record_line_id),
+    )
+    conn.commit()
+    return cur.rowcount == 1
 
 
 def delete_line(conn: sqlite3.Connection, record_line_id: int) -> None:
@@ -243,16 +269,26 @@ def delete_line(conn: sqlite3.Connection, record_line_id: int) -> None:
 
 
 def get_lines(conn: sqlite3.Connection, record_sheet_id: int, section: str) -> list[dict]:
-    """Return one section's lines in order, with name, Part # and price resolved from the catalog now."""
+    """Return one section's lines in order, with name, Part # and price resolved from the catalog now.
+
+    A typed line has no Part #, and its price is the one typed on the line.
+    """
     rows = conn.execute(
         """
         SELECT l.*,
+               CASE WHEN l.material_id IS NOT NULL THEN 'Warehouse'
+                    WHEN l.rd_id IS NOT NULL THEN 'Lab'
+                    ELSE 'Typed'
+               END AS source,
                CASE WHEN l.material_id IS NOT NULL THEN m.material_name
-                    ELSE TRIM(COALESCE(ls.flavor_name, '') || ' ' || COALESCE(ls.sample_code, ''))
+                    WHEN l.rd_id IS NOT NULL THEN
+                        TRIM(COALESCE(ls.flavor_name, '') || ' ' || COALESCE(ls.sample_code, ''))
+                    ELSE l.typed_name
                END AS name,
                COALESCE(m.dtf_part_num, ls.dtf_part_num) AS part_num,
                CASE WHEN l.material_id IS NOT NULL THEN m.current_price_per_kilo
-                    ELSE ls.price_per_kilo
+                    WHEN l.rd_id IS NOT NULL THEN ls.price_per_kilo
+                    ELSE l.typed_price_per_kilo
                END AS price_per_kilo
         FROM record_lines l
         LEFT JOIN materials m ON m.material_id = l.material_id
@@ -275,6 +311,7 @@ def flavor_lines(conn: sqlite3.Connection, flavor_profile_id: int | None) -> lis
     return [
         {
             "section": "flavor",
+            "source": l["source"],
             "name": l["name"],
             "part_num": _part_num(conn, l),
             "label_claim_mg": l["mg_per_serving"],

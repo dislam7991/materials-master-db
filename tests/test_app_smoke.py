@@ -349,9 +349,40 @@ def test_record_line_edits_save_percentages_as_fractions(db_path, monkeypatch):
                                     "1": {"Remove": True}}}}
     monkeypatch.setattr(tab.st, "session_state", state)
 
-    tab._apply_edits(conn, "ed", lines, "ver")
+    tab._apply_edits(conn, "ed", lines, "ver", "err")
 
     (line,) = rs.get_lines(conn, rid, "active")
     assert line["record_line_id"] == keep
     assert (line["label_claim_mg"], line["activity"], line["overage"]) == (1000, pytest.approx(0.234), pytest.approx(0.1))
     assert state["ver"] == 1
+
+
+def test_record_price_edits_save_on_a_typed_line_only(db_path, monkeypatch):
+    from dtf_materials import record_sheets as rs
+    from ui import sample_record_tab as tab
+
+    conn = db.init_db(db_path)
+    mid = conn.execute("SELECT material_id FROM materials LIMIT 1").fetchone()[0]
+    rid = rs.create_record(conn)
+    rs.add_line(conn, rid, "active", material_id=mid)
+    rs.add_line(conn, rid, "active", typed_name="Green Tea Extract (98% L-Theanine)")
+    catalog, typed = (dict(l) for l in rs.get_lines(conn, rid, "active"))
+    state = {"ed": {"edited_rows": {"0": {"Price / kg": 1.0}, "1": {"Price / kg": 60.0}}}}
+    monkeypatch.setattr(tab.st, "session_state", state)
+
+    tab._apply_edits(conn, "ed", [catalog, typed], "ver", "err")
+
+    after = {l["source"]: l["price_per_kilo"] for l in rs.get_lines(conn, rid, "active")}
+    assert after["Typed"] == 60.0
+    assert after["Warehouse"] == catalog["price_per_kilo"]
+    assert "catalog" in state["err"]
+
+
+def test_record_search_offers_a_typed_material():
+    from ui.sample_record_tab import _line_options
+
+    conn = db.init_db(":memory:")
+    options = _line_options(conn, " Green Tea Extract ")
+    assert options[-1] == ("✎ Use “Green Tea Extract” as typed — not in either catalog",
+                           ("typed", "Green Tea Extract"))
+    assert _line_options(conn, "  ") == []

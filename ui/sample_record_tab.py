@@ -26,7 +26,7 @@ NEW = "➕ New record sheet"
 SECTION_TITLES = {"active": "Actives", "excipient": "Excipients"}
 
 # Inputs are typed as percentages (36 for 36 %) and stored as fractions.
-EDITABLE = ["#", "Label claim (mg)", "Activity %", "Overage %", "Remove"]
+EDITABLE = ["#", "Label claim (mg)", "Activity %", "Overage %", "Price / kg", "Remove"]
 LINE_COLUMNS = {
     "#": st.column_config.NumberColumn(width="small", step=1, help="Order in the section — change it to move a line"),
     "Label claim (mg)": st.column_config.NumberColumn(format="%g", min_value=0.0),
@@ -39,7 +39,10 @@ LINE_COLUMNS = {
     "g / run": st.column_config.NumberColumn(format="%.3f"),
     "kg / run": st.column_config.NumberColumn(format="%.6f"),
     "Formula %": st.column_config.NumberColumn(format="%.2f%%"),
-    "Price / kg": st.column_config.NumberColumn(format="$%.2f", help="From the catalog — blank if none is on file"),
+    "Price / kg": st.column_config.NumberColumn(
+        format="$%.2f", min_value=0.0,
+        help="From the catalog — blank if none is on file. Only a typed line's price can be typed here.",
+    ),
     "Cost / unit": st.column_config.NumberColumn(format="$%.4f", help="Per jar: per serving × servings per unit"),
     "Remove": st.column_config.CheckboxColumn(width="small", help="Tick to remove the line"),
 }
@@ -185,7 +188,7 @@ def _render_add_line(conn: sqlite3.Connection, rid: int, section: str) -> None:
     st_searchbox(
         lambda term: _line_options(conn, term),
         label=f"Add to {SECTION_TITLES[section].lower()}",
-        placeholder="Search warehouse and lab by name, Part # or sample code — pick one to add it",
+        placeholder="Search warehouse and lab by name, Part # or sample code — or type a new material's name",
         key=f"record_add_{rid}_{section}",
         clear_on_submit=True,
         submit_function=lambda picked: _add_picked(conn, rid, section, picked),
@@ -196,7 +199,7 @@ def _render_add_line(conn: sqlite3.Connection, rid: int, section: str) -> None:
 
 
 def _line_options(conn: sqlite3.Connection, term: str) -> list[tuple[str, tuple]]:
-    """Return search-box options from both catalogs. No "use as typed": this sheet carries a cost."""
+    """Return search-box options: warehouse matches, lab matches, then "use as typed" for a material neither carries."""
     options = [
         (f"Warehouse · {r['dtf_part_num'] or '(no part #)'} — {r['material_name']}"
          + (f" · {money(r['current_price_per_kilo'])}/kg" if r["current_price_per_kilo"] is not None else ""),
@@ -209,6 +212,8 @@ def _line_options(conn: sqlite3.Connection, term: str) -> list[tuple[str, tuple]
          ("lab", r["rd_id"]))
         for r in q.search_lab_samples(conn, term, limit=8)
     ]
+    if term.strip():
+        options.append((f"✎ Use “{term.strip()}” as typed — not in either catalog", ("typed", term.strip())))
     return options
 
 
@@ -223,7 +228,9 @@ def _add_picked(conn: sqlite3.Connection, rid: int, section: str, picked) -> Non
         )
         return
     rs.add_line(conn, rid, section,
-                material_id=ref if kind == "material" else None, rd_id=ref if kind == "lab" else None)
+                material_id=ref if kind == "material" else None,
+                rd_id=ref if kind == "lab" else None,
+                typed_name=ref if kind == "typed" else None)
 
 
 def _pct(value) -> float | None:
@@ -237,6 +244,7 @@ def _display_row(line: dict) -> dict:
         "#": line.get("position"),
         "Part #": line["part_num"],
         "Material": line["name"],
+        "Source": "Typed — not in catalog" if line["source"] == "Typed" else line["source"],
         "Label claim (mg)": line["label_claim_mg"],
         "Activity %": _pct(line["activity"]),
         "Overage %": _pct(line["overage"]),
@@ -253,7 +261,7 @@ def _display_row(line: dict) -> dict:
 def _table(lines: list[dict]) -> pd.DataFrame:
     """The lines as a DataFrame with every number column numeric, so a blank shows empty, not "None"."""
     df = pd.DataFrame([_display_row(l) for l in lines])
-    numeric = [c for c in df.columns if c not in ("Part #", "Material", "Remove")]
+    numeric = [c for c in df.columns if c not in ("Part #", "Material", "Source", "Remove")]
     return df.astype({c: "float64" for c in numeric})
 
 
@@ -261,21 +269,27 @@ def _render_line_table(conn: sqlite3.Connection, rid: int, section: str, lines: 
     """Draw a section's editable lines, saving each edit as it's made."""
     version_key = f"record_lines_version_{rid}_{section}"
     editor_key = f"record_lines_{rid}_{section}_{st.session_state.get(version_key, 0)}"
-    state = [{k: l[k] for k in ("record_line_id", "position", "label_claim_mg", "activity", "overage")}
+    state = [{k: l[k] for k in ("record_line_id", "source", "position", "label_claim_mg", "activity", "overage")}
              for l in lines]
     st.data_editor(
         _table(lines),
         key=editor_key,
         on_change=_apply_edits,
-        args=(conn, editor_key, state, version_key),
+        args=(conn, editor_key, state, version_key, f"record_error_{rid}_{section}"),
         hide_index=True, width="stretch",
         disabled=[c for c in _display_row(lines[0]) if c not in EDITABLE],
         column_config=LINE_COLUMNS,
     )
 
 
-def _apply_edits(conn: sqlite3.Connection, editor_key: str, lines: list[dict], version_key: str) -> None:
-    """Save the table's edits, then reset it (the editor tracks rows by position, stale after a removal)."""
+def _apply_edits(
+    conn: sqlite3.Connection, editor_key: str, lines: list[dict], version_key: str, error_key: str,
+) -> None:
+    """Save the table's edits, then reset it (the editor tracks rows by position, stale after a removal).
+
+    A price typed on a catalog line is not saved: that price comes from the
+    catalog row, and is corrected in the sheet it loads from.
+    """
     def value(edit: dict, column: str, current, scale: float = 1.0):
         """The edited value (a cleared cell is None), or the current one when untouched."""
         if column not in edit:
@@ -296,6 +310,12 @@ def _apply_edits(conn: sqlite3.Connection, editor_key: str, lines: list[dict], v
             overage=value(edit, "Overage %", line["overage"], 100),
             position=line["position"] if position is None else int(position),
         )
+        if "Price / kg" in edit and not rs.set_typed_price(conn, line["record_line_id"],
+                                                         value(edit, "Price / kg", None)):
+            st.session_state[error_key] = (
+                "A Warehouse or Lab price comes from its catalog and can't be changed here. "
+                "Only a typed line's price can be typed."
+            )
     st.session_state[version_key] = st.session_state.get(version_key, 0) + 1
 
 
@@ -321,6 +341,10 @@ def _render_totals(record, result: dict) -> None:
     if result["unpriced"]:
         st.warning("No price on file for: " + ", ".join(result["unpriced"])
                    + ". Their cost is left out, not counted as $0.")
+    typed = [l["name"] for l in result["lines"] if l.get("source") == "Typed"]
+    if typed:
+        st.info("Not in either catalog: " + ", ".join(typed) + ". Name and price are as typed, and no "
+                "Part # goes on the sheet. Add it to the inventory once the company carries it.")
 
 
 def _render_record_blocks(conn: sqlite3.Connection, rid: int) -> None:

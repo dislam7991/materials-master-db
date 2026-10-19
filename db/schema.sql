@@ -307,9 +307,12 @@ CREATE INDEX IF NOT EXISTS idx_flavor_sheet_snapshots_sheet ON flavor_sheet_snap
 -- Authored data no loader can rebuild, like the flavor sheets: the ETL and
 -- the lab loader must never touch these tables (tests pin it).
 --
--- A line references a catalog row (material_id XOR rd_id) and never copies
--- its name, Part # or price. No typed lines: this sheet carries a cost, so a
--- typed name would be an unbacked price (SPEC §2). Activity and overage are
+-- A line references a catalog row (material_id or rd_id) and never copies
+-- its name, Part # or price. Or it is typed (user's call, 2026-10-19): an
+-- experimental material the company doesn't carry yet still belongs in the
+-- formula. A typed line has no Part #, carries its own name and, optionally,
+-- a price the user typed; the tab labels both "not in catalog", so a typed
+-- price is never mistaken for a catalog one. Activity and overage are
 -- fractions, as the sheet stores them (0.36 = 36 %); Actual Input and every
 -- other column are computed, never stored.
 CREATE TABLE IF NOT EXISTS record_sheets (
@@ -330,10 +333,14 @@ CREATE TABLE IF NOT EXISTS record_lines (
     position         INTEGER NOT NULL,   -- order within its section
     material_id      INTEGER REFERENCES materials(material_id),
     rd_id            TEXT REFERENCES lab_samples(rd_id),
+    typed_name       TEXT,   -- a material in neither catalog yet (an experimental sample)
+    typed_price_per_kilo REAL,   -- only on a typed line: there is no catalog row to read it from
     label_claim_mg   REAL,
     activity         REAL CHECK (activity IS NULL OR (activity > 0 AND activity <= 1)),
     overage          REAL CHECK (overage IS NULL OR overage >= 0),
-    CHECK ((material_id IS NULL) <> (rd_id IS NULL))
+    -- Exactly one source: a warehouse material, a lab sample, or a typed name.
+    CHECK ((material_id IS NOT NULL) + (rd_id IS NOT NULL) + (typed_name IS NOT NULL) = 1),
+    CHECK (typed_price_per_kilo IS NULL OR typed_name IS NOT NULL)
 );
 
 CREATE INDEX IF NOT EXISTS idx_record_lines_sheet ON record_lines(record_sheet_id);

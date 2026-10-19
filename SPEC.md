@@ -409,10 +409,18 @@ done. The three real templates were received 2026-09-21 and are mapped in
         Brand, Product, Quote ID, **Servings / unit** (servings in one jar,
         pre-filled 5, the sample jar), **Servings (base)** (batch size) and
         the flavor profile.
-      - Actives and excipients picked from Warehouse/Lab (no typed lines:
-        this sheet carries a cost). Per line, typed: label claim (mg),
-        Activity %, Overage %. Part #, name and Price/kg resolve from the
-        catalog row at read time.
+      - Actives and excipients picked from Warehouse/Lab. Per line, typed:
+        label claim (mg), Activity %, Overage %. Part #, name and Price/kg
+        resolve from the catalog row at read time.
+      - **Or typed** (user's call, 2026-10-19), for an experimental material
+        the company doesn't carry yet (e.g. a new extract under evaluation).
+        A typed line has a typed name, no Part #, and an optional typed
+        Price/kg; it is labelled "Typed — not in catalog" in the table and
+        named under the totals, so a typed price is never read as a catalog
+        one. A catalog line's price can't be typed over. Typed lines start
+        blank and aren't remembered (a typed name is no stable key).
+        Databases from the first F11 commit gain the typed columns on open,
+        rows kept (`db._add_typed_record_lines`).
       - The flavor profile's lines join the second section at Activity
         100 % / Overage 0, read from the profile (an edit there reaches the
         record sheet). BASE is left out.
@@ -434,8 +442,10 @@ done. The three real templates were received 2026-09-21 and are mapped in
         fix in the Backlog).
       DoD: `pytest` on the arithmetic (real PL block shapes: 1000 mg at
       23.4 % + 10 % → 4700.855), blanks, remembered activity, flavor lines
-      from the profile, loader isolation and the copy blocks; the smoke test
-      creates a record sheet and finds its blocks and totals.
+      from the profile, loader isolation, the copy blocks, typed lines
+      (price, blank Part #, catalog price not overridable) and the upgrade
+      of an older table; the smoke test creates a record sheet and finds its
+      blocks and totals.
 
 #### Parked in Phase F (user's call, 2026-09-24 — the automation skips these)
 
