@@ -37,6 +37,7 @@ import sqlite3
 
 from . import flavor_sheets as fs
 from . import queries
+from . import record_sheets as rs
 
 # Tabs and line breaks inside a value would shift every column after it (or
 # start a new row) when Excel splits the paste, so they are flattened to a space.
@@ -97,3 +98,47 @@ def _number_field(value: float | None) -> str:
         return ""
     value = float(value)
     return str(int(value)) if value.is_integer() else repr(value)
+
+
+def record_blocks(conn: sqlite3.Connection, record_sheet_id: int) -> dict:
+    """The copy blocks for a record sheet built in the app (SPEC F11).
+
+    Two blocks, one per section of the sheet: 'actives' pastes into A12,
+    'second' (excipients, then the flavor profile's lines) into A37. Each is
+    {'rows', 'text', 'unpriced'} in the same A:I shape as build_block, with D
+    and E the line's activity and overage as fractions (the sheet formats
+    them as %) and F its computed Actual Input as a value — the role the PL
+    Cost Sheet paste plays today (layout finding 1). A line missing an input
+    gets an empty F, never 0.
+    """
+    record = rs.get_record(conn, record_sheet_id)
+    if record is None:
+        return {"actives": _block([]), "second": _block([])}
+    lines = rs.compute(rs.all_lines(conn, record), record["servings_per_unit"], record["servings_base"])["lines"]
+    return {
+        "actives": _block([l for l in lines if l["section"] == "active"]),
+        "second": _block([l for l in lines if l["section"] != "active"]),
+    }
+
+
+def _block(lines: list[dict]) -> dict:
+    """Tab-separated A:I rows for computed record lines, plus the unpriced names."""
+    rows = [
+        [
+            _part_field(l["part_num"]),
+            _text_field(l["name"]),
+            _number_field(l["label_claim_mg"]),
+            _number_field(l["activity"]),
+            _number_field(l["overage"]),
+            _number_field(l["actual_input_mg"]),
+            "",
+            "",
+            _number_field(l["price_per_kilo"]),
+        ]
+        for l in lines
+    ]
+    return {
+        "rows": rows,
+        "text": "\n".join("\t".join(r) for r in rows),
+        "unpriced": [l["name"] or "" for l in lines if l["price_per_kilo"] is None],
+    }

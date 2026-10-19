@@ -295,3 +295,58 @@ CREATE TABLE IF NOT EXISTS flavor_sheet_snapshots (
 );
 
 CREATE INDEX IF NOT EXISTS idx_flavor_sheet_snapshots_sheet ON flavor_sheet_snapshots(flavor_sheet_id);
+
+-- Phase F (F11, experimental): the Sample Record Sheet, built in the app.
+-- The product formula lives in the PL Cost Sheet as hand-made blocks no
+-- parser can read safely (user, 2026-10-19), so the actives are picked from
+-- the catalogs here instead, like flavor lines. A record sheet is a header
+-- plus active and excipient lines; the flavor lines are not copied in, they
+-- are read from the chosen flavor profile, so an edit there reaches the
+-- record sheet.
+--
+-- Authored data no loader can rebuild, like the flavor sheets: the ETL and
+-- the lab loader must never touch these tables (tests pin it).
+--
+-- A line references a catalog row (material_id XOR rd_id) and never copies
+-- its name, Part # or price. No typed lines: this sheet carries a cost, so a
+-- typed name would be an unbacked price (SPEC §2). Activity and overage are
+-- fractions, as the sheet stores them (0.36 = 36 %); Actual Input and every
+-- other column are computed, never stored.
+CREATE TABLE IF NOT EXISTS record_sheets (
+    record_sheet_id    INTEGER PRIMARY KEY,
+    brand              TEXT,
+    product            TEXT,
+    quote_id           TEXT,
+    servings_per_unit  REAL,   -- servings in one jar; drives cost per unit (5 for samples)
+    servings_base      REAL,   -- batch size in servings; drives g/run and kg/run
+    flavor_profile_id  INTEGER REFERENCES flavor_profiles(flavor_profile_id) ON DELETE SET NULL,
+    created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS record_lines (
+    record_line_id   INTEGER PRIMARY KEY,
+    record_sheet_id  INTEGER NOT NULL REFERENCES record_sheets(record_sheet_id) ON DELETE CASCADE,
+    section          TEXT NOT NULL CHECK (section IN ('active', 'excipient')),
+    position         INTEGER NOT NULL,   -- order within its section
+    material_id      INTEGER REFERENCES materials(material_id),
+    rd_id            TEXT REFERENCES lab_samples(rd_id),
+    label_claim_mg   REAL,
+    activity         REAL CHECK (activity IS NULL OR (activity > 0 AND activity <= 1)),
+    overage          REAL CHECK (overage IS NULL OR overage >= 0),
+    CHECK ((material_id IS NULL) <> (rd_id IS NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_record_lines_sheet ON record_lines(record_sheet_id);
+
+-- The last Activity and Overage used for a material, so the next record
+-- sheet pre-fills them. "Last used", not a catalog fact: activity depends on
+-- what the label claim is expressed as (an extract claimed whole is 100 %,
+-- claimed as its marker compound it is a few %), so every line can override
+-- it. Its own table because the materials table belongs to the loaders.
+CREATE TABLE IF NOT EXISTS material_last_used (
+    material_id  INTEGER UNIQUE REFERENCES materials(material_id),
+    rd_id        TEXT UNIQUE REFERENCES lab_samples(rd_id),
+    activity     REAL,
+    overage      REAL,
+    CHECK ((material_id IS NULL) <> (rd_id IS NULL))
+);

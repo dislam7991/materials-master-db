@@ -159,8 +159,8 @@ done. The three real templates were received 2026-09-21 and are mapped in
       against a synthetic template of the real shape (CI installs openpyxl).
 - [x] **F2c. Sample Record Sheet** — next deliverable, same approach: work
       backwards from the template (layout map §1), reuse the flavor profiles.
-      Renderer only (`sample_record_xlsx.py`); no UI. It stays unused while
-      F2d–F2g are parked — managers build the sheet themselves (F2i).
+      Renderer only (`sample_record_xlsx.py`); no UI. Still unused: F11
+      builds the sheet in the app but hands it over as copy blocks.
 - [x] **F3. Reverse-engineer the three real templates** (flavor sheet, sample
       record sheet, labels) — which cells are inputs, which are formulas, what
       the autocalc computes, which inputs the DB supplies vs. a human types.
@@ -168,9 +168,7 @@ done. The three real templates were received 2026-09-21 and are mapped in
       three, with template defects as findings); the two spreadsheet shapes
       are rebuilt synthetically inside `tests/test_flavor_sheets.py` and
       `tests/test_sample_record.py`, so CI needs no committed template file.
-- **You, not the automation (updated 2026-09-24):** for F2f when it's unparked: one PL Cost Sheet
-  formula table pasted into `data/real/templates/pl_cost_paste.txt` (header
-  row included). The labels template arrived as `.docx` 2026-09-24. The
+- **You, not the automation (updated 2026-09-24):** The labels template arrived as `.docx` 2026-09-24. The
   manager-built record sheet arrived 2026-09-24
   (`Sample_Record_Sheet_Template_Filled.xlsx`, layout map §1). The template
   is **not** to be enlarged or "fixed" by hand any more — the typed F values
@@ -401,17 +399,53 @@ done. The three real templates were received 2026-09-21 and are mapped in
       fields and zero flavors. The smoke test opens a sheet, starts a new
       one from it, and finds the old sheet's flavor under Start from.
 
+- [x] **F11. Sample Record Sheet builder (experimental)** (user's call,
+      2026-10-19; replaces F2d and F2e, retires F2f and F2g). A product's
+      formula lives in the PL Cost Sheet: one tab per customer, every quote
+      ID pasted as a loose block of cells. No parser can read that safely,
+      so the actives are picked from the catalogs in the app, like flavor
+      lines. On the Sample Record Sheet tab, above the F2i block:
+      - Saved, reopenable record sheets (`record_sheets`, `record_lines`):
+        Brand, Product, Quote ID, **Servings / unit** (servings in one jar,
+        pre-filled 5, the sample jar), **Servings (base)** (batch size) and
+        the flavor profile.
+      - Actives and excipients picked from Warehouse/Lab (no typed lines:
+        this sheet carries a cost). Per line, typed: label claim (mg),
+        Activity %, Overage %. Part #, name and Price/kg resolve from the
+        catalog row at read time.
+      - The flavor profile's lines join the second section at Activity
+        100 % / Overage 0, read from the profile (an edit there reaches the
+        record sheet). BASE is left out.
+      - Activity and Overage are remembered per material
+        (`material_last_used`) and pre-fill the next line. "Last used", not
+        a catalog fact: activity depends on what the claim is expressed as.
+        No history pre-fills blank.
+      - Computed, never stored: **Actual Input** = claim × (1 + overage) /
+        activity, 3 decimals half-up; g/run and kg/run from the batch;
+        **Formula %** = Actual Input / total (sums to 100 %, unlike the
+        template's finding 2 — user's call); **Cost / unit** per jar = mg /
+        1e6 × $/kg × servings per unit. Totals: serving size, kg/run, cost
+        per unit (actives / excipients + flavor), cost per serving.
+      - A blank is never 0: a line missing claim, activity or overage has no
+        Actual Input and is named; an unpriced line has no cost and is named.
+      - Output is two copy blocks in F2i's A:I shape, one per section (A12,
+        A37), F as the computed value — the role the PL Cost Sheet paste
+        plays today. No `.xlsx` download (that needs F2c2 and the renderer
+        fix in the Backlog).
+      DoD: `pytest` on the arithmetic (real PL block shapes: 1000 mg at
+      23.4 % + 10 % → 4700.855), blanks, remembered activity, flavor lines
+      from the profile, loader isolation and the copy blocks; the smoke test
+      creates a record sheet and finds its blocks and totals.
+
 #### Parked in Phase F (user's call, 2026-09-24 — the automation skips these)
 
-Kept, not dropped: the user wants all of these eventually. F2c2 and F2d–F2g
-were the "build the whole sheet in the app" path; F2i does the part that
-saves the most copy-paste first. Activity per material: the user will supply
-data for it later, likely as its own table — that feeds F2d.
+Kept, not dropped: the user wants this eventually. F2c2 only matters once the
+record sheet is downloaded as a filled `.xlsx` instead of copy blocks.
 
 - [ ] **F2c2. Grow the excipient section instead of refusing.** *(Planned
       in #40, parked the same day: F2i's copy block replaced it, user's
       call 2026-09-24 — Excel grows the section when the user inserts rows.
-      It only matters again if F2e renders whole sheets.)* Flavor
+      It only matters again if F11 downloads whole sheets.)* Flavor
       profile + excipients sometimes exceed the 12 rows (37–48). The renderer
       inserts the extra rows below row 48, and everything under them moves
       down intact: the merged "Inactive Ingredient Cost" subtotal row and the
@@ -425,52 +459,15 @@ data for it later, likely as its own table — that feeds F2d.
       checks the subtotal/total formulas cover all 15, the cost panel points
       at the moved cells, and the merged subtotal label moved with its row;
       12 lines still renders byte-for-byte as before.
-- [ ] **F2d. Remembered Activity / Overage per material.** Neither is in the
-      source data. Store the last value used per material (Warehouse or Lab
-      row, by id), pre-fill it on the next record sheet, overridable per sheet.
-      Flavor-profile lines default to Activity 1, Overage 0. Never shown as a
-      catalog fact — it's "last used", labelled as such.
-      DoD: `pytest` covers save, pre-fill, per-sheet override, and that a
-      material with no history pre-fills blank (never a guessed number).
-- [ ] **F2e. Sample Record Sheet tab** (user's design, 2026-09-23). Pick a
-      flavor profile → Flavor, Sample code, Product (and Brand when the sheet
-      has a customer) fill from it. Human header fields typed: Scoop size,
-      Servings/Unit, Quote ID, Jar/Lid (the template's two options), Servings
-      (base). Actives and excipients picked from Warehouse/Lab like the Flavor
-      Sheet (label claim mg, Activity/Overage via F2d); Part # and Price/kg
-      always resolved from the DB (`record_line_catalog`), a missing price
-      shown blank and flagged. The profile's flavor lines append after the
-      excipients automatically. Saved and reopenable; a "Download Sample Record
-      Sheet" button renders it. Excipient overflow grows the sheet (F2c2).
-      Flag (don't block) when the profile's BASE mg ≠ the actives'
-      label-claim total.
-      DoD: usable in the app end-to-end — a record sheet built from a synthetic
-      flavor profile, saved, reopened and downloaded; `pytest` covers the save
-      tables, the auto-fill and the BASE check.
-- [ ] **F2f. Paste actives from the PL Cost Sheet.** A paste box on the F2e
-      tab: user copies a formula table from the Google Sheet (TSV on the
-      clipboard), the app parses Material, Label Claim, Activity, Overage,
-      matches each material to the DB, and shows unmatched rows for the user
-      to resolve by picking (never auto-merged — section 5). A confirmed match
-      is remembered so the same spelling resolves next time. Pasted Activity/
-      Overage feed F2d. No Google API — paste only. Needs
-      `data/real/templates/pl_cost_paste.txt` for the column shape; commit a
-      synthetic fixture of that shape, never the real rows.
-      DoD: usable in the app; `pytest` covers parsing the synthetic paste,
-      matched/unmatched handling, and the remembered match.
-- [ ] **F2g. Import a manager-built record sheet (.xlsx).** Upload on the F2e
-      tab: read header, actives (rows 12–34) and excipients (rows 37–48) into
-      the record, then render fresh from the template — never write into the
-      uploaded file. Part # / Price/kg re-resolved from the DB; Activity and
-      Overage taken from the file (and fed to F2d); rows whose material doesn't
-      match go to the same resolve step as F2f. Needs the real manager sheet in
-      `data/real/templates/` to confirm it follows the template's rows.
-      DoD: usable in the app; `pytest` covers import from a synthetic manager
-      sheet, flavor lines appended after its excipients, and excipient overflow
-      growing the sheet (F2c2).
-      *2026-09-24: F2i chose a copy block over writing into the manager's
-      file, partly because openpyxl alters a workbook it saves — weigh that
-      here too when this is unparked.*
+
+Replaced 2026-10-19 (user's call), no longer parked:
+
+- **F2d** (remembered Activity / Overage) and **F2e** (Sample Record Sheet
+  tab) are built as **F11**.
+- **F2f** (paste actives from the PL Cost Sheet) and **F2g** (import a
+  manager-built record sheet) are retired. The PL Cost Sheet is hand-made
+  blocks per quote ID that no parser reads without mistakes; the actives are
+  picked in the app instead.
 
 ### Phase G — Online and multi-user (gated: do not start unprompted)
 
@@ -820,6 +817,15 @@ flag, don't guess). Decision + why; the detail is in git history if needed.
   and no real code embeds another aisle's prefix — latent, not felt. Revisit
   when a location search returns something visibly wrong. Pinned by
   `test_location_search_currently_matches_a_prefix_anywhere_in_the_code`.
+
+- **The record sheet renderer would print the template's example F
+  values.** The real blank template has numbers typed into F12:F18 (layout
+  finding 1); `sample_record_xlsx.render` clears A:E and I but not F, so a
+  rendered sheet would show the example's Actual Input on those rows. CI's
+  synthetic template has formulas there, so the tests don't catch it. Latent:
+  nothing calls the renderer (F11 hands over copy blocks). Fix before any
+  `.xlsx` download of a record sheet: write F as the computed Actual Input,
+  or restore the formula.
 
 ### Resolved (kept for the reasoning)
 
