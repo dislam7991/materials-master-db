@@ -84,9 +84,11 @@ templates mapped ([layout doc](docs/phase_f_templates_layout.md)); the Flavor
 Sheet tab — build, save, reopen and download the filled template; the Sample
 Record Sheet copy block. Remaining: **labels** (F4, filling the `.docx` label
 template) and a **snapshot at download** (F2h), so a reprint after a reprice
-can be told apart from the copy already sent. Building the whole record sheet
-in the app (F2c2, F2d–F2g) is parked — the copy block saves most of the
-typing first.
+can be told apart from the copy already sent. The Sample Record Sheet builder
+(F11, experimental) picks actives and excipients from the catalogs, takes
+label claim, activity and overage, works out Actual Input, g/run, Formula %
+and cost per jar, and hands each section over as a block to paste into the
+template.
 
 **Gated — Phase G (online and multi-user).** Written down so the shape is
 agreed in advance, not queued: every step spends money, moves company data off

@@ -102,7 +102,9 @@ no values) — Human, filled after lab testing if at all.
    the rows nobody pasted over. Don't restore it and don't "correct" pasted
    values — the PL Cost Sheet is the source. A tool never writes F on the
    actives rows, and never assumes F = C·(1+E)/D there (one real row is ~0.4 %
-   off).
+   off). *2026-10-19:* a sheet built in the app (SPEC F11) takes the PL Cost
+   Sheet's place as the source: its copy block writes F as the app's own
+   C·(1+E)/D, rounded half-up to 3 decimals, as a value.
 2. **Formula % divides label claim by total actual input.** `H = C / F50`
    mixes pre-overage mg with post-overage mg; the cached H50 in the template
    is **56.65%**, not 100%. Probably meant `F / F50`.
