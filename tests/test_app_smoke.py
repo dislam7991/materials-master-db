@@ -334,18 +334,21 @@ def test_record_sheet_builder_creates_then_shows_lines_totals_and_blocks(db_path
     assert any(m.label == "Serving size (mg)" and m.value == "4,750.855" for m in at.metric)
 
 
-def test_record_line_edits_save_percentages_as_fractions(db_path, monkeypatch):
+def test_record_line_edits_save_activity_and_overage_as_typed_fractions(db_path, monkeypatch):
     """The data editor can't be typed into from AppTest, so its on_change
-    handler is driven directly with the edits Streamlit would hand it."""
+    handler is driven directly with the edits Streamlit would hand it. The
+    values are the PL Cost Sheet's fractions, which must land unscaled (F12)."""
     from dtf_materials import record_sheets as rs
     from ui import sample_record_tab as tab
 
     conn = db.init_db(db_path)
-    mid = conn.execute("SELECT material_id FROM materials LIMIT 1").fetchone()[0]
-    rid = rs.create_record(conn)
+    mid = conn.execute(
+        "SELECT material_id FROM materials WHERE current_price_per_kilo IS NOT NULL LIMIT 1"
+    ).fetchone()[0]
+    rid = rs.create_record(conn, servings_per_unit=5, servings_base=1000)
     keep, _ = (rs.add_line(conn, rid, "active", material_id=mid) for _ in range(2))
     lines = [dict(l) for l in rs.get_lines(conn, rid, "active")]
-    state = {"ed": {"edited_rows": {"0": {"Label claim (mg)": 1000, "Activity %": 23.4, "Overage %": 10},
+    state = {"ed": {"edited_rows": {"0": {"Label claim (mg)": 24.75, "Activity %": 0.99, "Overage %": 0.1},
                                     "1": {"Remove": True}}}}
     monkeypatch.setattr(tab.st, "session_state", state)
 
@@ -353,7 +356,15 @@ def test_record_line_edits_save_percentages_as_fractions(db_path, monkeypatch):
 
     (line,) = rs.get_lines(conn, rid, "active")
     assert line["record_line_id"] == keep
-    assert (line["label_claim_mg"], line["activity"], line["overage"]) == (1000, pytest.approx(0.234), pytest.approx(0.1))
+    assert (line["label_claim_mg"], line["activity"], line["overage"]) == (24.75, 0.99, 0.1)
+    record = next(r for r in rs.list_records(conn) if r["record_sheet_id"] == rid)
+    (row,) = rs.compute(rs.all_lines(conn, record), record["servings_per_unit"], record["servings_base"])["lines"]
+    assert row["actual_input_mg"] == pytest.approx(27.5)
+    assert row["g_per_run"] == pytest.approx(27.5)
+    assert row["formula_pct"] == pytest.approx(1.0)
+    assert row["cost_per_unit"] == pytest.approx(27.5 / 1_000_000 * row["price_per_kilo"] * 5)
+    shown = tab._display_row(row)
+    assert (shown["Activity %"], shown["Overage %"], shown["Formula %"]) == (0.99, 0.1, 100)
     assert state["ver"] == 1
 
 
