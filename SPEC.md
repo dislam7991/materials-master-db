@@ -447,7 +447,7 @@ done. The three real templates were received 2026-09-21 and are mapped in
       of an older table; the smoke test creates a record sheet and finds its
       blocks and totals.
 
-- [ ] **F12. Activity and Overage typed as fractions** (user's call,
+- [x] **F12. Activity and Overage typed as fractions** (user's call,
       2026-10-21). The PL Cost Sheet holds Activity and Overage as fractions
       (0.99, 0.1) formatted as percentages; F11's table takes whole-number
       percents (99, 10) and divides by 100, so a pasted line is 100× off: a

@@ -25,16 +25,19 @@ OPEN_KEY = "record_open"
 NEW = "➕ New record sheet"
 SECTION_TITLES = {"active": "Actives", "excipient": "Excipients"}
 
-# Inputs are typed as percentages (36 for 36 %) and stored as fractions.
+# Activity and Overage are typed as fractions (0.36 for 36 %), as the PL Cost
+# Sheet holds them, so a pasted value lands unscaled (SPEC F12).
 EDITABLE = ["#", "Label claim (mg)", "Activity %", "Overage %", "Price / kg", "Remove"]
 LINE_COLUMNS = {
     "#": st.column_config.NumberColumn(width="small", step=1, help="Order in the section — change it to move a line"),
     "Label claim (mg)": st.column_config.NumberColumn(format="%g", min_value=0.0),
     "Activity %": st.column_config.NumberColumn(
-        format="%g", min_value=0.01, max_value=100.0,
-        help="How much of the claimed nutrient the material yields: 36 for a salt that is 36 % sodium",
+        format="percent", min_value=0.0001, max_value=1.0,
+        help="How much of the claimed nutrient the material yields: 0.36 for a salt that is 36 % sodium",
     ),
-    "Overage %": st.column_config.NumberColumn(format="%g", min_value=0.0, help="Extra added for loss, e.g. 10"),
+    "Overage %": st.column_config.NumberColumn(
+        format="percent", min_value=0.0, max_value=1.0, help="Extra added for loss, e.g. 0.1",
+    ),
     "Actual input (mg)": st.column_config.NumberColumn(format="%.3f"),
     "g / run": st.column_config.NumberColumn(format="%.3f"),
     "kg / run": st.column_config.NumberColumn(format="%.6f"),
@@ -246,8 +249,8 @@ def _display_row(line: dict) -> dict:
         "Material": line["name"],
         "Source": "Typed — not in catalog" if line["source"] == "Typed" else line["source"],
         "Label claim (mg)": line["label_claim_mg"],
-        "Activity %": _pct(line["activity"]),
-        "Overage %": _pct(line["overage"]),
+        "Activity %": line["activity"],
+        "Overage %": line["overage"],
         "Actual input (mg)": line["actual_input_mg"],
         "g / run": line["g_per_run"],
         "kg / run": line["kg_per_run"],
@@ -290,12 +293,12 @@ def _apply_edits(
     A price typed on a catalog line is not saved: that price comes from the
     catalog row, and is corrected in the sheet it loads from.
     """
-    def value(edit: dict, column: str, current, scale: float = 1.0):
+    def value(edit: dict, column: str, current):
         """The edited value (a cleared cell is None), or the current one when untouched."""
         if column not in edit:
             return current
         new = edit[column]
-        return None if new is None or pd.isna(new) else float(new) / scale
+        return None if new is None or pd.isna(new) else float(new)
 
     for idx, edit in st.session_state[editor_key].get("edited_rows", {}).items():
         line = lines[int(idx)]
@@ -306,8 +309,8 @@ def _apply_edits(
         rs.update_line(
             conn, line["record_line_id"],
             label_claim_mg=value(edit, "Label claim (mg)", line["label_claim_mg"]),
-            activity=value(edit, "Activity %", line["activity"], 100),
-            overage=value(edit, "Overage %", line["overage"], 100),
+            activity=value(edit, "Activity %", line["activity"]),
+            overage=value(edit, "Overage %", line["overage"]),
             position=line["position"] if position is None else int(position),
         )
         if "Price / kg" in edit and not rs.set_typed_price(conn, line["record_line_id"],
