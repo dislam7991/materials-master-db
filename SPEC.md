@@ -447,6 +447,25 @@ done. The three real templates were received 2026-09-21 and are mapped in
       of an older table; the smoke test creates a record sheet and finds its
       blocks and totals.
 
+- [ ] **F12. Activity and Overage typed as fractions** (user's call,
+      2026-10-21). The PL Cost Sheet holds Activity and Overage as fractions
+      (0.99, 0.1) formatted as percentages; F11's table takes whole-number
+      percents (99, 10) and divides by 100, so a pasted line is 100× off: a
+      24.75 mg claim at 0.99 / 0.1 computes 2502.5 mg instead of 27.5. The
+      stored values and every computed column are already fractions — the
+      bug is only the table's ×100 on display and ÷100 on input
+      (`ui/sample_record_tab.py`, `_display_row` / `_apply_edits`). Fix: the
+      Activity and Overage cells hold the fraction and display it as a
+      percentage (`NumberColumn(format="percent")`), bounds become 0–1, help
+      text gives 0.36 / 0.1. Actual Input, g/run, kg/run, Formula %, Cost /
+      unit and the totals follow from the stored fraction unchanged; the copy
+      blocks already write fractions. Don't rescale existing rows: a value
+      typed the old way is right, one pasted as a fraction is 100× too small
+      and indistinguishable from a real low activity — the user retypes those.
+      DoD: `pytest` (or the smoke test) types 24.75 / 0.99 / 0.1 into the
+      table and reads back stored 0.99 / 0.1 and Actual Input 27.5, with
+      g/run, Formula % and Cost / unit computed from it.
+
 #### Parked in Phase F (user's call, 2026-09-24 — the automation skips these)
 
 Kept, not dropped: the user wants this eventually. F2c2 only matters once the
