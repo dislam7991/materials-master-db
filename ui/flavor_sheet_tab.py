@@ -565,7 +565,8 @@ def cost_caption(cost: dict, servings) -> str | None:
             notes.append("set servings per flavor for a per-sample figure")
         if notes:
             estimate += f" — {', '.join(notes)}"
-        return estimate + ". Estimate only; BASE and unpriced lines are left out."
+        # \$ — two bare dollar signs in one line render as LaTeX.
+        return (estimate + ". Estimate only; BASE and unpriced lines are left out.").replace("$", "\\$")
     if cost["unpriced"]:
         return f"No prices on file for these {cost['unpriced']} material(s) yet, so no cost estimate."
     return None
