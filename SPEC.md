@@ -466,6 +466,127 @@ done. The three real templates were received 2026-09-21 and are mapped in
       table and reads back stored 0.99 / 0.1 and Actual Input 27.5, with
       g/run, Formula % and Cost / unit computed from it.
 
+**UI clarity pass (user's call, 2026-10-22).** The two builder tabs show
+every step of the job on one long page, all with the same weight, and users
+get lost. F13–F25 rearrange what is already there; none of them adds a
+feature, a stored field or a new way of saving. Bugs first, the app-wide
+rework last. Nothing saves until the user acts: no autosave anywhere (F24).
+The smoke tests find widgets by label, so each task updates the tests it
+moves in the same commit.
+
+- [ ] **F13. Flavor Sheet cost line renders as math.** `cost_caption`
+      (`ui/flavor_sheet_tab.py`) puts two `$` amounts in one line, and
+      Streamlit renders the text between them as LaTeX. Escape them, as
+      `_render_totals` in `ui/sample_record_tab.py` already does.
+      DoD: `test_cost_caption_*` assert every `$` in the caption is escaped
+      (`\$`), and no unescaped `$` is left in it.
+- [ ] **F14. Copy-block decimals.** `_number_field`
+      (`dtf_materials/record_copy_block.py`) writes `repr(value)`, so an
+      activity stored as 77.08 / 100 pastes as `0.7707999999999999`. Write at
+      most 10 significant digits with trailing zeros dropped — Excel keeps 15,
+      so the pasted value doesn't change — and keep whole numbers as `1`, `0`.
+      DoD: `pytest` on `_number_field`: 77.08 / 100 → `0.7708`, 4700.855 →
+      `4700.855`, 1.0 → `1`, 0.0 → `0`; the existing block tests still pass.
+- [ ] **F15. Hide the search when a flavor sheet is open.** With a sheet
+      open, the intro paragraph and the search box are not drawn; the
+      breadcrumbs are the way back, and both return once no sheet is open.
+      DoD: smoke test: an open sheet shows no "Search flavor sheets" input;
+      clicking "All customers" shows it again.
+- [ ] **F16. Details as one line.** On both builders, an open sheet's details
+      are shown as one summary line — Flavor Sheet: `Customer · Product ·
+      Quote ID · N servings · prefix`; Record Sheet: `Brand · Product · Quote
+      ID · N servings / unit · base N · Flavor` — with blanks shown as their
+      `(no …)` placeholder, never left out. An "Edit details" popover holds the
+      same fields; saving is unchanged (submit only). The "new sheet" forms
+      stay as they are.
+      DoD: smoke test on each tab: an open sheet shows the summary line, no
+      text inputs for the details outside the popover; editing a field there
+      and submitting changes the summary line and the stored row.
+- [ ] **F17. Flavor list column.** The open sheet's flavor radio becomes a
+      narrow left column: one button per flavor (`N. title`), ✓ when BASE is
+      set and every line has mg, ⚠ otherwise (from `fs.profile_total`'s
+      `base_set` / `blank_lines` — no new query logic), then "➕ Add a
+      flavor". The open flavor's editor fills the right column. `?flavor=`
+      stays the source of truth for which one is open.
+      DoD: smoke test: a sheet with one complete flavor and one with a blank
+      mg shows ✓ and ⚠ respectively; clicking a flavor sets `?flavor=` and
+      opens its editor.
+- [ ] **F18. Group the Flavor Sheet's actions and outputs.** One `⋯ Sheet
+      actions` popover holds "New flavor sheet from this one" and "Delete this
+      flavor sheet". One **Print & send** section holds Download Flavor Sheet,
+      scoops per serving with Download Labels, and Copies sent. The flavor's
+      total and rough cost show as `st.metric` cards (mg / serving, g /
+      sample, cost / serving, cost / sample); everything the captions say is
+      left out (BASE not set, lines with no mg, unpriced lines) stays as a
+      caption under the cards — never dropped to make the cards tidy.
+      DoD: smoke tests find both downloads and the delete under their new
+      homes; a flavor with a blank mg line shows the cards and the note
+      naming it.
+- [ ] **F19. Record Sheet in three views.** A segmented control at the top
+      of the tab: **Build** | **Copy to template** | **Flavor lines only**,
+      only the chosen view drawn. Default Build; Flavor lines only when no
+      record sheet exists (as the expander's `expanded=not records` does
+      today). The record picker sits above the control, shared by the first
+      two views.
+      DoD: smoke test: each view shows its own content and not the others';
+      the copy blocks appear only under Copy to template.
+- [ ] **F20. Fit the record tables.** Default columns: #, Part #, Material,
+      Source, Label claim, Activity, Overage, Actual input, Price / kg, Cost /
+      unit, Remove. A "Show batch columns" toggle adds g / run, kg / run and
+      Formula %. Material is pinned. Edits are keyed by column name, so a
+      hidden column changes nothing about saving.
+      DoD: smoke test: the default table has no g / run column, the toggle
+      adds it; an edit made with the batch columns hidden still saves.
+- [ ] **F21. Warnings on the rows.** A read-only ⚠ column on each section's
+      table says what that line is missing ("no claim", "no activity", "no
+      overage", "no price"), from the same `incomplete` / `unpriced` result
+      the totals already use. The boxes under the totals shrink to one line
+      each with the count, pointing at the ⚠ rows; the typed-line note stays.
+      DoD: smoke test: a line with no overage and a line with no price each
+      show their flag in the row; the totals still leave both out.
+- [ ] **F22. Record sheet in the URL, shorter flavor picker.** The open
+      record sheet lives in `?record=<id>`, like `?sheet=` on the Flavor
+      Sheet, so a reload reopens it; no param = New. Each tab touches only its
+      own params — the Flavor Sheet's `_open` must stop clearing every param,
+      or opening a flavor sheet closes the record sheet. The Flavor field
+      becomes two pickers: flavor sheet (same Quote ID first, then newest),
+      then flavor (`flavor_label`). The stored value is still
+      `flavor_profile_id`, saved only with the details.
+      DoD: smoke test: `?record=N` opens record N; opening a flavor sheet
+      keeps `?record=` and vice versa; a saved record preselects its flavor's
+      sheet and flavor.
+- [ ] **F23. Cross-links between the builders.** The record sheet's Flavor
+      section gets "Open in Flavor Sheet", which sets `?sheet=&flavor=` and
+      selects that tab (`st.tabs(default=…, key=…)`). The Flavor Sheet's
+      editor gets "Start a record sheet from this flavor", which opens the
+      Record tab's New form prefilled (brand ← customer, product, quote ID,
+      flavor). Prefilled, not created: the user still presses Create.
+      DoD: smoke test: each link lands on the other tab with the right sheet
+      and flavor open, or the New form prefilled; no record row is written
+      until Create.
+- [ ] **F24. Unsaved marker, still no autosave.** The three details editors —
+      flavor sheet details, a flavor's name / Sample ID / BASE, record sheet
+      details — save only on an explicit save, as now. Streamlit can't read a
+      form's fields until it is submitted, so a live marker means the fields
+      leave `st.form`: each field commits on Enter or leaving it (a rerun,
+      not a save), and when any differs from the stored row, "● Unsaved
+      changes" shows beside the Save button, which also answers Ctrl+Enter
+      (`st.button(shortcut=…)`). Rename-folder popovers and the New forms stay
+      forms.
+      DoD: smoke test on each editor: changing a field shows the marker and
+      leaves the stored row unchanged; Save writes it and clears the marker;
+      switching flavor or sheet with unsaved changes does not write them.
+- [ ] **F25. Sidebar pages.** The seven tabs become pages under
+      `st.navigation`, grouped **Lookup** (All Materials, Warehouse, R&D Lab,
+      Location, Inventory Table) and **Build** (Flavor Sheet, Sample Record
+      Sheet); only the open page runs. The four count cards show on Lookup
+      pages only. `?sheet=`, `?flavor=` and `?record=` keep working on their
+      pages, and F23's links become page links. Last on purpose: it touches
+      every tab and the whole smoke test.
+      DoD: smoke tests run per page; each page renders without error; a
+      `?sheet=N&flavor=M` link opens that flavor on the Flavor Sheet page;
+      F23's links still land.
+
 #### Parked in Phase F (user's call, 2026-09-24 — the automation skips these)
 
 Kept, not dropped: the user wants this eventually. F2c2 only matters once the
