@@ -468,9 +468,10 @@ done. The three real templates were received 2026-09-21 and are mapped in
 
 **UI clarity pass (user's call, 2026-10-22).** The two builder tabs show
 every step of the job on one long page, all with the same weight, and users
-get lost. F13–F25 rearrange what is already there; none of them adds a
+get lost. F13–F24 rearrange what is already there; none of them adds a
 feature, a stored field or a new way of saving. Bugs first, the app-wide
-rework last. Nothing saves until the user acts: no autosave anywhere (F24).
+rework last. Details stay in forms that save on Enter or Save — no autosave,
+and no unsaved marker (it would need the fields out of the form; user's call).
 The smoke tests find widgets by label, so each task updates the tests it
 moves in the same commit.
 
@@ -564,19 +565,7 @@ moves in the same commit.
       DoD: smoke test: each link lands on the other tab with the right sheet
       and flavor open, or the New form prefilled; no record row is written
       until Create.
-- [ ] **F24. Unsaved marker, still no autosave.** The three details editors —
-      flavor sheet details, a flavor's name / Sample ID / BASE, record sheet
-      details — save only on an explicit save, as now. Streamlit can't read a
-      form's fields until it is submitted, so a live marker means the fields
-      leave `st.form`: each field commits on Enter or leaving it (a rerun,
-      not a save), and when any differs from the stored row, "● Unsaved
-      changes" shows beside the Save button, which also answers Ctrl+Enter
-      (`st.button(shortcut=…)`). Rename-folder popovers and the New forms stay
-      forms.
-      DoD: smoke test on each editor: changing a field shows the marker and
-      leaves the stored row unchanged; Save writes it and clears the marker;
-      switching flavor or sheet with unsaved changes does not write them.
-- [ ] **F25. Sidebar pages.** The seven tabs become pages under
+- [ ] **F24. Sidebar pages.** The seven tabs become pages under
       `st.navigation`, grouped **Lookup** (All Materials, Warehouse, R&D Lab,
       Location, Inventory Table) and **Build** (Flavor Sheet, Sample Record
       Sheet); only the open page runs. The four count cards show on Lookup
