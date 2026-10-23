@@ -614,3 +614,75 @@ def test_an_unpriced_material_shows_blank_not_zero(linked_conn):
     [row] = _table_rows(linked_conn, "Alanine")
 
     assert row["Warehouse $/kg"] == "—"
+
+
+# --------------------------------------------------------------------------
+# Home dashboard
+# --------------------------------------------------------------------------
+
+# One sheet where each row is exactly one dashboard case, so a wrong count
+# names the rule it broke. Dates are relative to today, since the window is.
+def _dashboard_rows() -> list[RawRow]:
+    """Return the sheet: hold, expired, expiring, far-off, archived-expired, unlocated, unpriced."""
+    from datetime import date, timedelta
+
+    def mdy(days: int) -> str:
+        """Return a sheet-format date `days` from today."""
+        return (date.today() + timedelta(days=days)).strftime("%m/%d/%Y")
+
+    lot = {"Receiving Date": "01/01/2025", "Current Stock": "10", "Price Per Kilo": "5.00",
+           "Total cost": "50", "Locations": "6R-01-A"}
+    return [
+        _material("DB-0001", "Held Material", **{**lot, "DTF Lot #": "H-1", "Status": "hold "}),
+        _material("DB-0002", "Expired Material", **{**lot, "DTF Lot #": "E-1", "EXP. Date": mdy(-30)}),
+        _material("DB-0003", "Expiring Material", **{**lot, "DTF Lot #": "E-2", "EXP. Date": mdy(60)}),
+        _material("DB-0004", "Fine Material", **{**lot, "DTF Lot #": "E-3", "EXP. Date": mdy(200)}),
+        # Archived and expired: not stocked, so not on the dashboard at all.
+        _material("DB-0005", "Archived Material",
+                  **{**lot, "DTF Lot #": "A-1", "EXP. Date": mdy(-5), "Ready To Archive": "Yes"}),
+        _material("DB-0006", "Unlocated Material", **{**lot, "DTF Lot #": "U-1", "Locations": ""}),
+        _material("DB-0007", "Unpriced Material",
+                  **{**lot, "DTF Lot #": "P-1", "Price Per Kilo": "", "Total cost": ""}),
+    ]
+
+
+@pytest.fixture
+def dashboard_conn(tmp_path):
+    """The dashboard sheet, loaded through the real ETL."""
+    db_path = tmp_path / "test_dashboard.db"
+    etl.run(ListSource(_dashboard_rows()), db_path)
+    connection = connect(db_path)
+    yield connection
+    connection.close()
+
+
+def test_dashboard_counts_only_stocked_lots_for_each_exception(dashboard_conn):
+    dash = q.dashboard(dashboard_conn)
+
+    assert dash["on_hold"] == 1
+    assert dash["expiring_90d"] == 2          # expired + expiring, not the far-off or archived lot
+    assert dash["unlocated_lots"] == 1
+    assert dash["unpriced_materials"] == 1
+    assert dash["stocked_lots"] == 6          # everything but the archived lot
+    assert dash["stocked_value"] == 250.0     # five costed stocked lots at 50; the unpriced one has none
+    assert dash["stocked_lots_uncosted"] == 1
+    assert dash["raw_materials"] == 7
+    assert dash["ingested_at"] is not None
+
+
+def test_dashboard_reports_no_pull_and_no_lab_work_on_an_empty_database(tmp_path):
+    from dtf_materials.db import init_db
+
+    dash = q.dashboard(init_db(tmp_path / "empty.db"))
+
+    assert dash["ingested_at"] is None
+    assert dash["last_sheet"] is None
+    assert dash["last_download"] is None
+    assert dash["stocked_value"] is None      # no lots: a dash, never $0.00
+
+
+def test_expiring_lots_lists_expired_first_with_negative_days_left(dashboard_conn):
+    rows = q.expiring_lots(dashboard_conn, 90)
+
+    assert [r["dtf_part_num"] for r in rows] == ["DB-0002", "DB-0003"]
+    assert rows[0]["days_left"] < 0 < rows[1]["days_left"]

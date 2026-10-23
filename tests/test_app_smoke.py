@@ -468,3 +468,13 @@ def test_record_search_offers_a_typed_material():
     assert options[-1] == ("✎ Use “Green Tea Extract” as typed — not in either catalog",
                            ("typed", "Green Tea Extract"))
     assert _line_options(conn, "  ") == []
+
+
+def test_home_header_shows_freshness_panels_and_expanders(app):
+    """The old four-count header is now a caption; the panels and expanders draw without error."""
+    assert app.title[0].value == "Materials Master"
+    assert any("Inventory sheet pulled" in m.value for m in app.markdown)
+    assert {m.label for m in app.metric} >= {"On hold", "No location", "Stocked lots", "Downloads, 7 days"}
+    assert [e.label for e in app.expander][:3] == [
+        "Expiring lots (next 90 days, soonest first)", "Recent flavor sheets", "Data quality report",
+    ]
