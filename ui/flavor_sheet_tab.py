@@ -50,21 +50,22 @@ LINE_TABLE_COLUMNS = {
 
 def render(conn: sqlite3.Connection) -> None:
     """Draw the tab: search, folder path, then either a folder's contents or the open sheet."""
-    st.write(
-        "Fill in the Flavor Sheet: customer, product, quote ID and servings once, "
-        "then each flavor's materials in mg per serving. Grams per sample are "
-        "worked out for you, and **Download** fills in the company template "
-        "(four flavors to a page). Saved sheets are filed by customer, then "
-        "product · quote ID."
-    )
-
     open_id = _url_id("sheet")
     sheet = fs.get_sheet(conn, open_id) if open_id is not None else None
     if sheet is not None:
         # Going up from an open sheet lands in its own folder, even after a reload.
         st.session_state[FOLDER_STATE] = fs.sheet_folder(sheet)
-
-    _render_search(conn)
+    else:
+        # Only while browsing: an open sheet is already found, and the
+        # breadcrumbs are the way back to the search.
+        st.write(
+            "Fill in the Flavor Sheet: customer, product, quote ID and servings once, "
+            "then each flavor's materials in mg per serving. Grams per sample are "
+            "worked out for you, and **Download** fills in the company template "
+            "(four flavors to a page). Saved sheets are filed by customer, then "
+            "product · quote ID."
+        )
+        _render_search(conn)
     tree = fs.folders(conn)
     customer, quote = _browsed(tree)
     _render_breadcrumbs(customer, quote, sheet)

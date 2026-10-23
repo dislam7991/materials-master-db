@@ -488,7 +488,7 @@ moves in the same commit.
       so the pasted value doesn't change — and keep whole numbers as `1`, `0`.
       DoD: `pytest` on `_number_field`: 77.08 / 100 → `0.7708`, 4700.855 →
       `4700.855`, 1.0 → `1`, 0.0 → `0`; the existing block tests still pass.
-- [ ] **F15. Hide the search when a flavor sheet is open.** With a sheet
+- [x] **F15. Hide the search when a flavor sheet is open.** With a sheet
       open, the intro paragraph and the search box are not drawn; the
       breadcrumbs are the way back, and both return once no sheet is open.
       DoD: smoke test: an open sheet shows no "Search flavor sheets" input;
