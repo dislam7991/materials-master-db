@@ -14,8 +14,8 @@ import streamlit as st
 from dtf_materials import db
 from dtf_materials import queries as q
 from ui import (
-    all_materials_tab, combined_tab, flavor_sheet_tab, lab_tab, location_tab, material_tab,
-    sample_record_tab,
+    all_materials_tab, combined_tab, flavor_sheet_tab, home, lab_tab, location_tab,
+    material_tab, sample_record_tab,
 )
 from ui.common import get_conn
 
@@ -32,13 +32,7 @@ if not db.DEFAULT_DB_PATH.exists():
 conn = get_conn(db.DEFAULT_DB_PATH)
 summary = q.database_summary(conn)
 
-st.title("Materials Master Database")
-
-stat_materials, stat_lots, stat_suppliers, stat_locations = st.columns(4)
-stat_materials.metric("Materials", f"{summary['materials']:,}")
-stat_lots.metric("Lots", f"{summary['lots']:,}")
-stat_suppliers.metric("Supplier Spellings", f"{summary['suppliers']:,}")
-stat_locations.metric("Locations", f"{summary['locations']:,}")
+home.render(conn, db.DEFAULT_DB_PATH, summary)
 
 tabs = st.tabs([
     "All Materials Lookup", "Warehouse Lookup", "R&D Lab Lookup",

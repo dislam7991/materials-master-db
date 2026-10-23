@@ -429,3 +429,79 @@ def database_summary(conn: sqlite3.Connection) -> dict:
         # Routinely 0: the lab catalog is loaded by its own command.
         "lab_samples": scalar("SELECT COUNT(*) FROM lab_samples"),
     }
+
+
+def dashboard(conn: sqlite3.Connection) -> dict:
+    """Return the home-page dashboard figures: exceptions a human resolves, lab activity, inventory shape.
+
+    Every number is a count or sum of what the sheet records; nothing is
+    estimated. "Stocked" means what `total_stock` means: current stock above
+    zero and not flagged for archive.
+    """
+    def scalar(sql: str, *params):
+        """Run a single-value query and return the value."""
+        return conn.execute(sql, params).fetchone()[0]
+
+    stocked = "COALESCE(current_stock, 0) > 0 AND ready_to_archive = 0"
+    return {
+        # Freshness: when the inventory sheet was last staged (UTC, from the ETL).
+        "ingested_at": scalar("SELECT MAX(ingested_at) FROM staging_inventory_raw"),
+        # Needs attention.
+        "on_hold": scalar(f"SELECT COUNT(*) FROM lots WHERE {stocked} AND UPPER(TRIM(status)) = 'HOLD'"),
+        "expiring_90d": scalar(
+            f"SELECT COUNT(*) FROM lots WHERE {stocked} AND exp_date IS NOT NULL"
+            " AND exp_date <= date('now', '+90 days')"
+        ),
+        "unlocated_lots": scalar(
+            f"SELECT COUNT(*) FROM lots WHERE {stocked}"
+            " AND lot_id NOT IN (SELECT lot_id FROM lot_locations)"
+        ),
+        "unpriced_materials": scalar(
+            "SELECT COUNT(*) FROM materials WHERE current_price_per_kilo IS NULL AND is_sample_only = 0"
+        ),
+        # R&D activity (authored data: flavor and record sheets, downloads).
+        "sheets_7d": scalar(
+            "SELECT COUNT(*) FROM flavor_sheets WHERE created_at >= datetime('now', '-7 days')"
+        ),
+        "sheets_total": scalar("SELECT COUNT(*) FROM flavor_sheets"),
+        "last_sheet": conn.execute(
+            "SELECT customer, product, created_at FROM flavor_sheets ORDER BY flavor_sheet_id DESC LIMIT 1"
+        ).fetchone(),
+        "last_download": conn.execute(
+            "SELECT kind, taken_at FROM flavor_sheet_snapshots ORDER BY taken_at DESC LIMIT 1"
+        ).fetchone(),
+        "downloads_7d": scalar(
+            "SELECT COUNT(*) FROM flavor_sheet_snapshots WHERE taken_at >= datetime('now', '-7 days')"
+        ),
+        "record_sheets": scalar("SELECT COUNT(*) FROM record_sheets"),
+        # Inventory shape.
+        "stocked_lots": scalar(f"SELECT COUNT(*) FROM lots WHERE {stocked}"),
+        "stocked_value": scalar(f"SELECT SUM(total_cost) FROM lots WHERE {stocked}"),
+        "stocked_lots_uncosted": scalar(f"SELECT COUNT(*) FROM lots WHERE {stocked} AND total_cost IS NULL"),
+        "raw_materials": scalar("SELECT COUNT(*) FROM materials WHERE category = 'raw'"),
+        "flavor_materials": scalar("SELECT COUNT(*) FROM materials WHERE category = 'flavor'"),
+        "sample_only": scalar("SELECT COUNT(*) FROM materials WHERE is_sample_only = 1"),
+    }
+
+
+def expiring_lots(conn: sqlite3.Connection, days: int = 90, limit: int = 20) -> list[sqlite3.Row]:
+    """Return stocked lots expiring within `days` (already expired first), soonest first.
+
+    `days_left` is negative for a lot past its date. Locations are the raw
+    cell, since one lot can sit in several.
+    """
+    return conn.execute(
+        """
+        SELECT m.dtf_part_num, m.material_name, l.dtf_lot_num, l.exp_date,
+               CAST(julianday(l.exp_date) - julianday(date('now')) AS INTEGER) AS days_left,
+               l.current_stock, l.status, l.locations_raw
+        FROM lots l
+        JOIN materials m ON m.material_id = l.material_id
+        WHERE COALESCE(l.current_stock, 0) > 0 AND l.ready_to_archive = 0
+          AND l.exp_date IS NOT NULL
+          AND l.exp_date <= date('now', ? || ' days')
+        ORDER BY l.exp_date, l.lot_id
+        LIMIT ?
+        """,
+        (f"+{days}", limit),
+    ).fetchall()
