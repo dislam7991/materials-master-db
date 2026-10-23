@@ -92,12 +92,15 @@ def _part_field(value) -> str:
 
 
 def _number_field(value: float | None) -> str:
-    """A number as Excel reads it back exactly: whole numbers without '.0',
-    others at full precision; None -> '' (blank, never 0)."""
+    """A number as Excel reads it back: whole numbers without '.0', others at
+    10 significant digits with trailing zeros dropped (SPEC F14); None -> ''
+    (blank, never 0). repr() would paste float noise — 77.08 / 100 is
+    0.7707999999999999 — and Excel keeps 15 digits, so 10 changes nothing it
+    stores."""
     if value is None:
         return ""
     value = float(value)
-    return str(int(value)) if value.is_integer() else repr(value)
+    return str(int(value)) if value.is_integer() else f"{value:.10g}"
 
 
 def record_blocks(conn: sqlite3.Connection, record_sheet_id: int) -> dict:
