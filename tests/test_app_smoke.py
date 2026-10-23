@@ -129,8 +129,11 @@ def test_flavor_sheet_search_opens_a_match(db_path):
     at.text_input(key="flavor_sheet_search").input("raspberry").run()
     _click(at, "📄 Acme › Pre-Workout · Q-1")
     assert _param(at, "sheet") == str(sheet)
+    # An open sheet hides the search; the breadcrumbs bring it back, cleared.
+    assert not any(t.label == "Search flavor sheets" for t in at.text_input)
+    _click(at, "All customers")
+    assert not _param(at, "sheet")
     assert at.text_input(key="flavor_sheet_search").value == ""
-
 
 
 def test_new_sheet_from_an_open_one_offers_its_flavors_under_start_from(db_path):
