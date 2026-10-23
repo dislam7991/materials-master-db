@@ -481,7 +481,7 @@ moves in the same commit.
       `_render_totals` in `ui/sample_record_tab.py` already does.
       DoD: `test_cost_caption_*` assert every `$` in the caption is escaped
       (`\$`), and no unescaped `$` is left in it.
-- [ ] **F14. Copy-block decimals.** `_number_field`
+- [x] **F14. Copy-block decimals.** `_number_field`
       (`dtf_materials/record_copy_block.py`) writes `repr(value)`, so an
       activity stored as 77.08 / 100 pastes as `0.7707999999999999`. Write at
       most 10 significant digits with trailing zeros dropped — Excel keeps 15,

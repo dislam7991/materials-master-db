@@ -14,7 +14,7 @@ import pytest
 
 from dtf_materials import flavor_sheets as fs
 from dtf_materials.db import init_db
-from dtf_materials.record_copy_block import build_block
+from dtf_materials.record_copy_block import _number_field, build_block
 
 
 @pytest.fixture
@@ -118,3 +118,11 @@ def test_a_reprice_reaches_the_next_block(conn):
 
 def test_an_empty_profile_gives_an_empty_block(conn):
     assert build_block(conn, _profile(conn)) == {"rows": [], "text": "", "unpriced": []}
+
+
+@pytest.mark.parametrize(
+    "value, field",
+    [(77.08 / 100, "0.7708"), (4700.855, "4700.855"), (1.0, "1"), (0.0, "0"), (None, "")],
+)
+def test_number_field_drops_float_noise(value, field):
+    assert _number_field(value) == field
