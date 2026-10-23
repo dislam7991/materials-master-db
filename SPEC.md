@@ -475,7 +475,7 @@ and no unsaved marker (it would need the fields out of the form; user's call).
 The smoke tests find widgets by label, so each task updates the tests it
 moves in the same commit.
 
-- [ ] **F13. Flavor Sheet cost line renders as math.** `cost_caption`
+- [x] **F13. Flavor Sheet cost line renders as math.** `cost_caption`
       (`ui/flavor_sheet_tab.py`) puts two `$` amounts in one line, and
       Streamlit renders the text between them as LaTeX. Escape them, as
       `_render_totals` in `ui/sample_record_tab.py` already does.

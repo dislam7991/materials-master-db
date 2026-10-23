@@ -257,8 +257,21 @@ def test_cost_caption_labels_a_partial_estimate():
 
     cost = {"per_serving": 0.5, "per_sample": 15.0, "priced": 2, "unpriced": 1}
     caption = cost_caption(cost, servings=30)
-    assert "$0.50 / serving" in caption and "$15.00 / sample" in caption
+    assert "\\$0.50 / serving" in caption and "\\$15.00 / sample" in caption
     assert "excludes 1 line(s) with no price on file" in caption
+
+
+def test_cost_caption_escapes_every_dollar():
+    """Two bare `$` in one caption render the text between them as LaTeX (F13)."""
+    import re
+
+    from ui.flavor_sheet_tab import cost_caption
+
+    for servings, per_sample in ((30, 15.0), (None, None)):
+        cost = {"per_serving": 0.5, "per_sample": per_sample, "priced": 2, "unpriced": 1}
+        caption = cost_caption(cost, servings=servings)
+        assert "\\$0.50" in caption
+        assert not re.search(r"(?<!\\)\$", caption)
 
 
 def test_cost_caption_asks_for_servings_and_handles_no_prices():
