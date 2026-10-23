@@ -86,7 +86,7 @@ def render(conn: sqlite3.Connection) -> None:
 
     st.divider()
     if sheet["servings"] is None:
-        st.warning("Servings per flavor is blank, so the sheet can't work out any grams. Set it in the details above.")
+        st.warning("Servings per flavor is blank, so the sheet can't work out any grams. Set it under Edit details.")
     _render_download_and_delete(conn, sheet, profiles)
     _render_labels(conn, sheet, profiles)
     _render_sent_copies(conn, sheet)
@@ -315,10 +315,25 @@ def _render_new_sheet_form(
         st.rerun()
 
 
+def details_line(sheet) -> str:
+    """Return the open sheet's header as one line, `Customer · Product · Quote ID · N servings · prefix`.
+
+    A blank shows as its "(no …)" placeholder rather than being left out, so
+    a missing field is seen, not silently skipped.
+    """
+    customer, product, quote_id = (sheet[f] or fs.BLANK_LABELS[f] for f in ("customer", "product", "quote_id"))
+    servings = "(no servings)" if sheet["servings"] is None else f"{sheet['servings']:g} servings"
+    prefix = sheet["sample_prefix"] or "(no prefix)"
+    # Escaped: two bare `$` in a name would render as LaTeX (as in F13).
+    return " · ".join([customer, product, quote_id, servings, prefix]).replace("$", "\\$")
+
+
 def _render_sheet_details(conn: sqlite3.Connection, sheet) -> None:
-    """Draw the open sheet's editable header and save it on submit."""
+    """Draw the open sheet's header as one line, with its fields in an Edit details popover saved on submit."""
     sheet_id = sheet["flavor_sheet_id"]
-    with st.form(f"sheet_header_{sheet_id}"):
+    c_line, c_edit = st.columns([5, 1], vertical_alignment="center")
+    c_line.markdown(f"**{details_line(sheet)}**")
+    with c_edit.popover("Edit details"), st.form(f"sheet_header_{sheet_id}"):
         header = _sheet_header_inputs(sheet, f"sheet_{sheet_id}")
         if st.form_submit_button("Save details"):
             fs.update_sheet(conn, sheet_id, **header)

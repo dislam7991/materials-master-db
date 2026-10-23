@@ -493,7 +493,7 @@ moves in the same commit.
       breadcrumbs are the way back, and both return once no sheet is open.
       DoD: smoke test: an open sheet shows no "Search flavor sheets" input;
       clicking "All customers" shows it again.
-- [ ] **F16. Details as one line.** On both builders, an open sheet's details
+- [x] **F16. Details as one line.** On both builders, an open sheet's details
       are shown as one summary line — Flavor Sheet: `Customer · Product ·
       Quote ID · N servings · prefix`; Record Sheet: `Brand · Product · Quote
       ID · N servings / unit · base N · Flavor` — with blanks shown as their

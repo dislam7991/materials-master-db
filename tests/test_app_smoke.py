@@ -136,6 +136,37 @@ def test_flavor_sheet_search_opens_a_match(db_path):
     assert at.text_input(key="flavor_sheet_search").value == ""
 
 
+def _edit_details(at: AppTest):
+    """Return the "Edit details" popover block."""
+    return next(p for p in at.get("popover") if p.proto.popover.label == "Edit details")
+
+
+def _assert_details_only_in_popover(at: AppTest, key_prefix: str) -> None:
+    """Every details field (key starting `key_prefix`) is inside the Edit details popover, none outside."""
+    inside = {w.key for w in [*_edit_details(at).text_input, *_edit_details(at).number_input]}
+    every = {w.key for w in [*at.text_input, *at.number_input] if (w.key or "").startswith(key_prefix)}
+    assert every and every <= inside
+
+
+def test_flavor_sheet_details_show_as_one_line_and_edit_in_a_popover(db_path):
+    conn = db.init_db(db_path)
+    sheet = fs.create_sheet(conn, customer="Acme", quote_id="Q-1", servings=30)
+    conn.close()
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.query_params["sheet"] = str(sheet)
+    at.run()
+    assert any(m.value == "**Acme · (no product) · Q-1 · 30 servings · (no prefix)**" for m in at.markdown)
+    _assert_details_only_in_popover(at, f"sheet_{sheet}_")
+
+    _edit_details(at).text_input(key=f"sheet_{sheet}_product").input("Pre-Workout")
+    _click(at, "Save details")
+    assert any(m.value == "**Acme · Pre-Workout · Q-1 · 30 servings · (no prefix)**" for m in at.markdown)
+    conn = db.init_db(db_path)
+    assert fs.get_sheet(conn, sheet)["product"] == "Pre-Workout"
+    conn.close()
+
+
 def test_new_sheet_from_an_open_one_offers_its_flavors_under_start_from(db_path):
     conn = db.init_db(db_path)
     old = fs.create_sheet(conn, customer="Acme", product="Pre-Workout", quote_id="Q-1", servings=30)
@@ -348,6 +379,30 @@ def test_record_sheet_builder_creates_then_shows_lines_totals_and_blocks(db_path
     assert any("\t1000\t0.234\t0.1\t4700.855\t" in c.value for c in at.code)
     assert any("Mystery powder\t50\t1\t0\t50" in c.value for c in at.code)
     assert any(m.label == "Serving size (mg)" and m.value == "4,750.855" for m in at.metric)
+
+
+def test_record_sheet_details_show_as_one_line_and_edit_in_a_popover(db_path):
+    from dtf_materials import record_sheets as rs
+
+    conn = db.init_db(db_path)
+    rid = rs.create_record(conn, brand="Acme", quote_id="Q-1", servings_per_unit=5)
+    conn.close()
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    at.selectbox(key="record_open").set_value(rid).run()
+    assert not at.exception
+    line = "**Acme · (no product) · Q-1 · 5 servings / unit · (no base) · (no flavor)**"
+    assert any(m.value == line for m in at.markdown)
+    _assert_details_only_in_popover(at, f"record_{rid}_")
+
+    _edit_details(at).number_input(key=f"record_{rid}_base").set_value(1000)
+    _click(at, "Save details")
+    line = "**Acme · (no product) · Q-1 · 5 servings / unit · base 1000 · (no flavor)**"
+    assert any(m.value == line for m in at.markdown)
+    conn = db.init_db(db_path)
+    assert rs.get_record(conn, rid)["servings_base"] == 1000
+    conn.close()
 
 
 def test_record_line_edits_save_activity_and_overage_as_typed_fractions(db_path, monkeypatch):

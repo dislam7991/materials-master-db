@@ -144,10 +144,32 @@ def _create(conn: sqlite3.Connection) -> None:
     s[OPEN_KEY] = rs.create_record(conn, **header)
 
 
+def details_line(record, flavors: dict) -> str:
+    """Return the open record sheet's header as one line,
+    `Brand · Product · Quote ID · N servings / unit · base N · Flavor`.
+
+    A blank shows as its "(no …)" placeholder rather than being left out, so
+    a missing field is seen, not silently skipped.
+    """
+    spu, base = record["servings_per_unit"], record["servings_base"]
+    parts = [
+        record["brand"] or "(no brand)",
+        record["product"] or "(no product)",
+        record["quote_id"] or "(no quote ID)",
+        "(no servings / unit)" if spu is None else f"{spu:g} servings / unit",
+        "(no base)" if base is None else f"base {base:g}",
+        flavors.get(record["flavor_profile_id"], "(no flavor)"),
+    ]
+    # Escaped: two bare `$` in a name would render as LaTeX (as in F13).
+    return " · ".join(parts).replace("$", "\\$")
+
+
 def _render_record(conn: sqlite3.Connection, record, flavors: dict) -> None:
     """Draw an open record sheet: header, the two sections, flavor lines, totals and copy blocks."""
     rid = record["record_sheet_id"]
-    with st.form(f"record_header_{rid}"):
+    c_line, c_edit = st.columns([5, 1], vertical_alignment="center")
+    c_line.markdown(f"**{details_line(record, flavors)}**")
+    with c_edit.popover("Edit details"), st.form(f"record_header_{rid}"):
         header = _header_inputs(record, f"record_{rid}", flavors)
         if st.form_submit_button("Save details"):
             rs.update_record(conn, rid, **header)
@@ -164,7 +186,7 @@ def _render_record(conn: sqlite3.Connection, record, flavors: dict) -> None:
 
     st.subheader("Flavor")
     if record["flavor_profile_id"] is None:
-        st.caption("No flavor chosen. Pick one in the details above.")
+        st.caption("No flavor chosen. Pick one under Edit details.")
     elif not by_section["flavor"]:
         st.caption("This flavor has no lines.")
     else:
@@ -174,9 +196,9 @@ def _render_record(conn: sqlite3.Connection, record, flavors: dict) -> None:
 
     _render_totals(record, result)
     if record["servings_per_unit"] is None:
-        st.warning("Servings / unit is blank, so there is no cost per unit. Set it in the details above.")
+        st.warning("Servings / unit is blank, so there is no cost per unit. Set it under Edit details.")
     if record["servings_base"] is None:
-        st.info("Servings (base) is blank, so g/run and kg/run are empty. Set it in the details above.")
+        st.info("Servings (base) is blank, so g/run and kg/run are empty. Set it under Edit details.")
     _render_record_blocks(conn, rid)
 
     with st.popover("Delete this record sheet"):
