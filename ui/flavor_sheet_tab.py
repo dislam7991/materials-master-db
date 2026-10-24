@@ -78,11 +78,15 @@ def render(conn: sqlite3.Connection) -> None:
     _render_new_sheet_form(conn, {k: sheet[k] for k in fs.HEADER_FIELDS}, f"from_sheet_{sheet_id}",
                            label="➕ New flavor sheet from this one")
     profiles = fs.get_profiles(conn, sheet_id)
-    picked = _pick_flavor(sheet_id, profiles)
-    if picked == ADD_FLAVOR:
-        _render_add_flavor_form(conn, sheet, profiles)
-    else:
-        _render_flavor_editor(conn, sheet, next(p for p in profiles if p["flavor_profile_id"] == picked))
+    picked = _open_flavor(profiles)
+    c_list, c_flavor = st.columns([1, 4])
+    with c_list:
+        _render_flavor_list(conn, sheet, profiles, picked)
+    with c_flavor:
+        if picked == ADD_FLAVOR:
+            _render_add_flavor_form(conn, sheet, profiles)
+        else:
+            _render_flavor_editor(conn, sheet, next(p for p in profiles if p["flavor_profile_id"] == picked))
 
     st.divider()
     if sheet["servings"] is None:
@@ -340,27 +344,48 @@ def _render_sheet_details(conn: sqlite3.Connection, sheet) -> None:
             st.rerun()
 
 
-def _pick_flavor(sheet_id: int, profiles: list) -> int | str:
-    """Draw the flavor picker and return the open flavor's id, or ADD_FLAVOR."""
+def _open_flavor(profiles: list) -> int | str:
+    """Return the open flavor's id from ?flavor=, or ADD_FLAVOR; the last flavor if the URL names none of them."""
     profile_ids = [p["flavor_profile_id"] for p in profiles]
-    options = profile_ids + [ADD_FLAVOR]
     open_flavor = ADD_FLAVOR if st.query_params.get("flavor") == "new" else _url_id("flavor")
-    if open_flavor not in options:
+    if open_flavor not in profile_ids + [ADD_FLAVOR]:
         open_flavor = profile_ids[-1] if profile_ids else ADD_FLAVOR
-    picked = st.radio(
-        "Flavor",
-        options,
-        index=options.index(open_flavor),
-        format_func=lambda o: o if o == ADD_FLAVOR else next(
-            f"{p['position']}. {fs.profile_title(p)}" for p in profiles if p["flavor_profile_id"] == o
-        ),
-        horizontal=True,
+    return open_flavor
+
+
+def flavor_done(profile, lines: list) -> bool:
+    """Return True when BASE is set and every line has mg (from fs.profile_total).
+
+    Read from the same count the total caption explains, so the list's mark
+    and the sentence under the table never disagree.
+    """
+    total = fs.profile_total(profile, lines)
+    return total["base_set"] and not total["blank_lines"]
+
+
+def flavor_button_label(profile, done: bool) -> str:
+    """Return a flavor's list label, `N. title ✓` when it's complete, else `N. title ⚠`."""
+    return f"{profile['position']}. {fs.profile_title(profile)} {'✓' if done else '⚠'}"
+
+
+def _render_flavor_list(conn: sqlite3.Connection, sheet, profiles: list, open_flavor: int | str) -> None:
+    """Draw one button per flavor, then Add a flavor; the open one is highlighted, and a click sets ?flavor=."""
+    sheet_id = sheet["flavor_sheet_id"]
+    for p in profiles:
+        pid = p["flavor_profile_id"]
+        done = flavor_done(p, fs.get_lines(conn, pid))
+        # Remembered so the editor, a fragment, can redraw the list when its edits flip the mark.
+        st.session_state[f"flavor_done_{pid}"] = done
+        st.button(
+            flavor_button_label(p, done), key=f"flavor_btn_{pid}", width="stretch",
+            type="primary" if pid == open_flavor else "secondary",
+            on_click=_open, args=(sheet_id, pid),
+        )
+    st.button(
+        ADD_FLAVOR, key=f"flavor_btn_new_{sheet_id}", width="stretch",
+        type="primary" if open_flavor == ADD_FLAVOR else "secondary",
+        on_click=_open, args=(sheet_id, "new"),
     )
-    assert picked is not None
-    if picked != open_flavor:
-        _open(sheet_id, "new" if picked == ADD_FLAVOR else picked)
-        st.rerun()
-    return picked
 
 
 def _render_add_flavor_form(conn: sqlite3.Connection, sheet, profiles: list) -> None:
@@ -422,6 +447,8 @@ def _render_flavor_editor(conn: sqlite3.Connection, sheet, profile) -> None:
         st.error(st.session_state.pop(f"line_error_{pid}"))
 
     lines = fs.get_lines(conn, pid)
+    if flavor_done(profile, lines) != st.session_state.get(f"flavor_done_{pid}"):
+        st.rerun(scope="app")   # the ✓ / ⚠ in the flavor list is outside this fragment
     if not lines:
         st.info("No materials yet. Search above and pick one to add it.")
     else:

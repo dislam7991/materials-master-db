@@ -221,6 +221,29 @@ def test_open_flavor_shows_its_total_under_the_table(db_path):
     )
 
 
+def test_flavor_list_marks_complete_flavors_and_opens_one(db_path):
+    conn = db.init_db(db_path)
+    sheet_id = fs.create_sheet(conn, customer="Acme", servings=30)
+    done = fs.add_profile(conn, sheet_id, flavor_name="Mango", base_mg=9000)
+    fs.add_line(conn, done, typed_name="Mango flavor", mg_per_serving=300)
+    blank = fs.add_profile(conn, sheet_id, flavor_name="Peach", base_mg=9000)
+    fs.add_line(conn, blank, typed_name="Peach flavor")
+    conn.close()
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.query_params["sheet"] = str(sheet_id)
+    at.query_params["flavor"] = str(blank)
+    at.run()
+
+    assert not at.exception
+    labels = [b.label for b in at.button]
+    assert "1. Mango ✓" in labels and "2. Peach ⚠" in labels and "➕ Add a flavor" in labels
+    assert not at.radio
+    _click(at, "1. Mango")
+    assert _param(at, "flavor") == str(done)
+    assert at.text_input(key=f"pname_{done}").value == "Mango"
+
+
 def test_total_caption_names_what_it_leaves_out():
     from ui.flavor_sheet_tab import total_caption
 

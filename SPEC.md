@@ -503,7 +503,7 @@ moves in the same commit.
       DoD: smoke test on each tab: an open sheet shows the summary line, no
       text inputs for the details outside the popover; editing a field there
       and submitting changes the summary line and the stored row.
-- [ ] **F17. Flavor list column.** The open sheet's flavor radio becomes a
+- [x] **F17. Flavor list column.** The open sheet's flavor radio becomes a
       narrow left column: one button per flavor (`N. title`), ✓ when BASE is
       set and every line has mg, ⚠ otherwise (from `fs.profile_total`'s
       `base_set` / `blank_lines` — no new query logic), then "➕ Add a
